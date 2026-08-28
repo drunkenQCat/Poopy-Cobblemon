@@ -1,0 +1,81 @@
+plugins {
+    id 'java-library'
+    // ModDevGradle：NeoForge 官方推荐的 1.21.1 开发插件（1.0.x 最后稳定版）
+    id 'net.neoforged.moddev' version '1.0.24'
+}
+
+group = 'com.poketoilet'
+version = '1.0.0'
+
+base {
+    archivesName = 'poketoilet'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+// 让 mods.toml 里的 ${file.jarVersion} 解析出真实版本号
+tasks.named('jar', Jar) {
+    manifest {
+        attributes 'Implementation-Version': project.version
+    }
+}
+
+// 让编译产物带上 UTF-8（源码里有中文注释/字符串）
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+neoForge {
+    // 与 Prism 实例里安装的 NeoForge 保持一致
+    version = "21.1.240"
+
+    runs {
+        client {
+            client()
+        }
+        server {
+            server()
+        }
+        data {
+            data()
+        }
+    }
+
+    mods {
+        poketoilet {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+// ---------------------------------------------------------------
+// 附属模组依赖：编译期引用本机整合包内的 PoopSkyMod / Cobblemon / Kotlin
+// （compileOnly：运行时由 mod 容器提供，避免与 run/mods 或 JarJar 里的
+//   同一 jar 二次加载产生模块冲突）
+// ---------------------------------------------------------------
+dependencies {
+    compileOnly fileTree('libs') { include '*.jar' }
+}
+
+// ---------------------------------------------------------------
+// 一键把编译好的 mod jar 复制进 Prism 实例的 mods 目录
+// 用法：gradlew installToInstance
+// ---------------------------------------------------------------
+def instanceModsDir = rootProject.layout.projectDirectory.dir('../minecraft/mods').asFile
+tasks.register('installToInstance', Copy) {
+    dependsOn tasks.named('jar')
+    from(tasks.named('jar'))
+    into(instanceModsDir)
+    doFirst {
+        if (!instanceModsDir.exists()) {
+            throw new GradleException("找不到实例 mods 目录: ${instanceModsDir}")
+        }
+        // 清理旧版本，避免 mods 里堆积多个 poketoilet-*.jar
+        delete fileTree(instanceModsDir) { include 'poketoilet-*.jar' }
+        println ">>> 正把 mod jar 安装到: ${instanceModsDir}"
+    }
+}

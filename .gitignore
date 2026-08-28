@@ -1,0 +1,26 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+bin/
+
+# 游戏运行目录（gradlew runClient 生成）
+run/
+logs/
+
+# 编译依赖 jar：从整合包 minecraft/mods 手动复制（cobblemon 等体积大、
+# 且许可证不允许再分发），见 README「构建」一节
+libs/
+
+# 系统
+*.log
+Thumbs.db
+.DS_Store

@@ -1,0 +1,13 @@
+{
+  "entity.poketoilet.seat": "Toilet Seat",
+  "message.poketoilet.sit_pokemon_toilet": "%s squatted over the toilet and started pushing...",
+  "message.poketoilet.sit_pokemon_flush": "%s hopped onto the flush toilet and started pushing...",
+  "message.poketoilet.sit_self_toilet": "You squatted over the toilet",
+  "message.poketoilet.sit_self_flush": "You sat on the flush toilet",
+  "message.poketoilet.toilet_occupied_toilet": "This toilet is already occupied",
+  "message.poketoilet.toilet_occupied_flush": "This flush toilet is already occupied",
+  "message.poketoilet.ride_failed_toilet": "%s refused to use the toilet...",
+  "message.poketoilet.ride_failed_flush": "%s refused to sit on the flush toilet...",
+  "message.poketoilet.empty_lead": "No leashed creature nearby (leash a Pokemon first)",
+  "message.poketoilet.flush_closed": "The lid is closed — open it first"
+}
