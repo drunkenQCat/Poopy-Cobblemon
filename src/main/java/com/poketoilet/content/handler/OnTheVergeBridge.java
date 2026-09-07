@@ -1,12 +1,16 @@
 package com.poketoilet.content.handler;
 
+import com.altnoir.poopsky.content.block.abs.AbstractToiletBlock;
+import com.altnoir.poopsky.content.block.p.FlushToiletBlock;
 import com.altnoir.poopsky.content.recipe.AnalPressingRecipe;
 import com.altnoir.poopsky.impl.util.PoopTntUtil;
+import com.altnoir.poopsky.init.PoBlocks;
 import com.altnoir.poopsky.init.PoEffects;
 import com.altnoir.poopsky.init.PoRecipes;
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.LivingEntity;
@@ -55,7 +59,9 @@ public final class OnTheVergeBridge {
             return false;
         }
 
-        // 与 OnTheVergeEffect 玩家分支完全一致：配方匹配（厕所方块 + 下方块）才拆厕
+        // 与 OnTheVergeEffect 玩家分支一致：ANAL_PRESSING 配方命中（矿石压制类特殊方块）
+        // 才走 removeBlock + 下方块转换。普通厕所没有配方，玩家路径同样不拆——
+        // 这里对宝可梦改为直接轰碎（掉落本体），保证触发肉眼可见
         BlockState toiletState = level.getBlockState(toiletPos);
         BlockState belowState = level.getBlockState(toiletPos.below());
         RecipeManager recipes = level.getRecipeManager();
@@ -70,6 +76,9 @@ public final class OnTheVergeBridge {
                 break;
             }
         }
+        if (!matched) {
+            level.destroyBlock(toiletPos, true, entity);
+        }
 
         // 体型系数：Pokemon.scaleModifier（体型差异模组写入），其他生物恒为 1
         float scale = 1.0F;
@@ -81,14 +90,53 @@ public final class OnTheVergeBridge {
 
         level.explode(entity, entity.getX(), entity.getY(-0.0625), entity.getZ(),
                 2.0F, Level.ExplosionInteraction.NONE);
+        // PoopSky 原生侵染（只对 poop_tnt_replaceable 标签方块生效，如泥土草地）
         PoopTntUtil.triggerExplosion(entity, radius);
+        // 可见侵染圈：以厕所为圆心铺 PoopSky 的大便方块，任意地表可见，半径随体型
+        int covered = placeContamination(level, toiletPos, radius);
 
         entity.removeEffect(PoEffects.ON_THE_VERGE);
         if (matched) {
             entity.removeEffect(PoEffects.INTESTINAL_SPASM);
         }
-        LOGGER.info("[Poketoilet] {} 触发一触即发 @ {}，侵染半径 {}（体型 x{}）",
-                entity.getName().getString(), toiletPos, radius, scale);
+        LOGGER.info("[Poketoilet] {} 触发一触即发 @ {}，侵染半径 {}（体型 x{}），铺便 {} 格",
+                entity.getName().getString(), toiletPos, radius, scale, covered);
         return true;
+    }
+
+    /**
+     * 以 {@code center}（厕所方块）为圆心、{@code radius} 为半径，在贴近地表的
+     * 空气位铺 PoopSky 的 POOP_BLOCK（大便）。只放在“空气 + 下方为坚固表面”的格子，
+     * 跳过厕所/乘客所在列，不覆盖任何已有方块。
+     */
+    private static int placeContamination(ServerLevel level, BlockPos center, int radius) {
+        BlockState poop = PoBlocks.POOP_BLOCK.get().defaultBlockState();
+        int placed = 0;
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                if ((dx == 0 && dz == 0) || dx * dx + dz * dz > radius * radius) {
+                    continue;
+                }
+                for (int dy = 3; dy >= -3; dy--) {
+                    BlockPos pos = center.offset(dx, dy, dz);
+                    if (!level.getBlockState(pos).isAir()) {
+                        continue;
+                    }
+                    BlockPos belowPos = pos.below();
+                    BlockState below = level.getBlockState(belowPos);
+                    if (below.isAir() || !below.isFaceSturdy(level, belowPos, Direction.UP)) {
+                        continue;
+                    }
+                    if (below.getBlock() instanceof AbstractToiletBlock
+                            || below.getBlock() instanceof FlushToiletBlock) {
+                        break;
+                    }
+                    level.setBlockAndUpdate(pos, poop);
+                    placed++;
+                    break;
+                }
+            }
+        }
+        return placed;
     }
 }

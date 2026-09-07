@@ -72,6 +72,14 @@ public class SeatEntity extends Entity {
         if (this.level().isClientSide || !(this.level() instanceof ServerLevel serverLevel)) {
             return;
         }
+
+        // 一触即发桥接：每 tick 检查（药水效果可能只存在几十 tick，放在排便闸门内会漏掉）。
+        // 触发会轰掉厕所，下个 tick 底下不再是厕所方块 -> 自毁弹出乘客
+        if (this.isVehicle() && this.getFirstPassenger() instanceof LivingEntity living
+                && OnTheVergeBridge.tryTrigger(serverLevel, living, this.toiletPos)) {
+            return;
+        }
+
         if (this.tickCount % POOP_COOLDOWN != 0) {
             return;
         }
@@ -84,10 +92,6 @@ public class SeatEntity extends Entity {
         }
 
         if (this.isVehicle() && this.getFirstPassenger() instanceof LivingEntity living) {
-            // 坐着期间被施加“一触即发”（如被泼药水）也能触发；触发会拆掉厕所，下个 tick 自毁
-            if (OnTheVergeBridge.tryTrigger(serverLevel, living, this.toiletPos)) {
-                return;
-            }
             boolean golden = ToiletUtil.isGoldenToilet(this.level(), this.toiletPos);
             ToiletUtil.onPoop(serverLevel, living, false, golden, 0.1F, 0.5F);
         }
