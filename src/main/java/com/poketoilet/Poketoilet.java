@@ -1,6 +1,7 @@
 package com.poketoilet;
 
 import com.mojang.logging.LogUtils;
+import com.poketoilet.battle.HeldItemBattleEffects;
 import com.poketoilet.content.entity.SeatEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
@@ -43,6 +44,7 @@ public class Poketoilet {
 
     public Poketoilet(IEventBus modEventBus) {
         ENTITY_TYPES.register(modEventBus);
+        HeldItemBattleEffects.register();
 
         LOGGER.info("Poketoilet 已加载：PoopSkyMod + Cobblemon 附属模组（宝可梦坐马桶产屎）");
     }

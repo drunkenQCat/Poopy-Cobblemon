@@ -9,6 +9,9 @@ displayName="Poketoilet"
 description='''PoopSkyMod + Cobblemon 附属模组：用拴绳把宝可梦牵上 PoopSky 的厕所坐好，它会持续蹲坑产出 PoopSky 的大便；玩家也可以空手右键厕所坐下，或按原版机制蹲在上面。（MC 1.21.1 / NeoForge 21.1.240）'''
 authors="sky-toilet-dev"
 
+[[mixins]]
+config="poketoilet.mixins.json"
+
 [[dependencies.poketoilet]]
 modId="neoforge"
 type="required"

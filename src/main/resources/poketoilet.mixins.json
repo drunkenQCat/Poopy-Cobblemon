@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "com.poketoilet.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "mixins": [
+    "MoveInstructionMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

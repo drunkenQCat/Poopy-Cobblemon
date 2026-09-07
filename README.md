@@ -27,7 +27,16 @@
      铺大便方块圈（任意地表可见，不覆盖已有方块）。
    - **侵染半径随宝可梦体型缩放**：`min(18, round((强度+2) × 体型))`，体型取
      `Pokemon.scaleModifier`（体型差异模组写入值），玩家路径不受影响。
-4. **原版机制不受影响**：玩家站在 PoopSky 厕所上按 Shift 蹲坑，本来就是 PoopSky 自带功能，本模组不干预。
+4. **携带物品战斗效果**（PoopSky 物品 + Cobblemon 战斗）：
+   - **番泻叶**（`poopsky:folium_sennae`）：携带后每次使用任意技能（消耗 PP），
+     敌方所有出战宝可梦速度阶级 -1，可叠加至 -6。实现：Mixin 挂 Cobblemon
+     `MoveInstruction.invoke`（Cobblemon 无公开"使用技能"事件）。
+   - **帝王火龙果**（`poopsky:king_of_dragon_fruit`）：每次进入战斗，对自己造成
+     固定 1% 最大生命的伤害，对敌方每只出战宝可梦造成 `体型 × 等级` 点伤害
+     （体型 = `Pokemon.scaleModifier`，即体型差异模组的体型值）。
+   - 两种扣血一律**保底留 1 HP**：战斗血量权威在 Showdown 引擎，直接打至 0 会
+     脱同步；"恶系"为风味设定，实际按上述固定公式结算。
+5. **原版机制不受影响**：玩家站在 PoopSky 厕所上按 Shift 蹲坑，本来就是 PoopSky 自带功能，本模组不干预。
 
 ## 依赖（`mods.toml` 均为 required）
 

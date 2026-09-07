@@ -56,9 +56,17 @@ neoForge {
 // 附属模组依赖：编译期引用本机整合包内的 PoopSkyMod / Cobblemon / Kotlin
 // （compileOnly：运行时由 mod 容器提供，避免与 run/mods 或 JarJar 里的
 //   同一 jar 二次加载产生模块冲突）
+// Kotlin stdlib：Cobblemon 的 Kotlin API（如 observable.subscribe 的重载）
+// 在编译期重载解析时需要 Function1 的类文件；KFF 的 -all jar 不含 stdlib，
+// 从 Maven Central 拉（走 gradle.properties 里的代理）
 // ---------------------------------------------------------------
+repositories {
+    mavenCentral()
+}
+
 dependencies {
     compileOnly fileTree('libs') { include '*.jar' }
+    compileOnly "org.jetbrains.kotlin:kotlin-stdlib:2.0.20"
 }
 
 // ---------------------------------------------------------------
