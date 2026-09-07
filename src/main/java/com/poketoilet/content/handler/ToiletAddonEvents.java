@@ -38,15 +38,16 @@ import java.util.List;
  * “厕所”（{@link AbstractToiletBlock} 系列，蹲坑）和“马桶”
  * （{@link FlushToiletBlock}，即 {@code poopsky:flush_toilet}，坐式抽水马桶）做区分：
  * <ul>
- *   <li><strong>手持拴绳</strong>右键：把该玩家附近拴着的生物（宝可梦优先、取最近）
- *       牵上座椅，玩家自己不上。厕所用本模组的 {@link SeatEntity}（每 2 秒调用
+ *   <li><strong>附近有该玩家拴着的生物</strong>（无论手上拿什么）→ 生物上座位，
+ *       玩家自己不上。厕所用本模组的 {@link SeatEntity}（每 2 秒调用
  *       PoopSky 的 {@code ToiletUtil.onPoop}）；马桶直接复用 PoopSky 自带的
  *       {@link FlushToiletEntity} 座椅（排便/金马桶/冲水都是 PoopSky 原生逻辑）。
  *       宝可梦用 {@code startRiding(seat, true)} 强制乘骑，绕过
- *       {@code PokemonEntity.canRide} 的平台类型限制。</li>
- *   <li><strong>空手</strong>右键厕所：玩家自己坐下；右键马桶则不干预，
- *       PoopSky 原生就会让玩家坐上马桶。</li>
- *   <li>其他物品右键：不处理，交给 PoopSky / 原版。</li>
+ *       {@code PokemonEntity.canRide} 的平台类型限制。判断依据是拴绳状态
+ *       （拴绳末端是这位玩家），不要求手里拿着拴绳。</li>
+ *   <li><strong>没有拴着的生物</strong>：空手右键厕所 → 玩家自己坐下；
+ *       空手右键马桶则不干预，PoopSky 原生就会让玩家坐上马桶；
+ *       手持拴绳 → 提示先拴住宝可梦；其他物品 → 不处理，交给 PoopSky / 原版。</li>
  * </ul>
  */
 @EventBusSubscriber(modid = Poketoilet.MODID)
@@ -87,26 +88,25 @@ public final class ToiletAddonEvents {
         }
 
         ItemStack held = event.getItemStack();
-        if (held.getItem() instanceof LeadItem) {
-            handleLeashClick(level, state, pos, player, event, flush);
+        Mob target = findLeashedBy(level, pos, player);
+        if (target != null) {
+            // 拴着的生物优先：无论手上拿什么都让它上厕所
+            handleLeashClick(level, state, pos, player, event, flush, target);
         } else if (held.isEmpty() && !flush) {
             // 马桶空手右键由 PoopSky 原生处理（坐下/开盖/开容器），不干预
             handleEmptyHandClick(level, pos, player, event);
+        } else if (held.getItem() instanceof LeadItem) {
+            // 手持拴绳但附近没有自己拴着的生物：给个提示，功能已不依赖手持拴绳
+            player.displayClientMessage(Component.translatable("message.poketoilet.empty_lead"), true);
+            event.setCanceled(true);
         }
     }
 
-    /** 手持拴绳右键：拴着的生物上座位，玩家不上 */
+    /** 拴着的生物上座位，玩家不上（判断依据是拴绳状态，与手持物品无关） */
     private static void handleLeashClick(Level level, BlockState state, BlockPos pos, Player player,
-                                         PlayerInteractEvent.RightClickBlock event, boolean flush) {
+                                         PlayerInteractEvent.RightClickBlock event, boolean flush, Mob target) {
         if (flush && state.getValue(FlushToiletBlock.CLOSED)) {
             player.displayClientMessage(Component.translatable("message.poketoilet.flush_closed"), true);
-            event.setCanceled(true);
-            return;
-        }
-
-        Mob target = findLeashedBy(level, pos, player);
-        if (target == null) {
-            player.displayClientMessage(Component.translatable("message.poketoilet.empty_lead"), true);
             event.setCanceled(true);
             return;
         }
@@ -174,8 +174,10 @@ public final class ToiletAddonEvents {
     }
 
     private static SeatEntity findOrCreateSeat(Level level, BlockPos pos) {
-        List<SeatEntity> seats = level.getEntitiesOfClass(SeatEntity.class,
-                new AABB(pos).inflate(1.0), SeatEntity::isAlive);
+        // 只在本方块内找、且校验座椅记录的归属坐标：
+        // 之前搜索框 inflate(1.0) 会命中相邻坑位的座椅，导致一只宝可梦锁死两个坑
+        List<SeatEntity> seats = level.getEntitiesOfClass(SeatEntity.class, new AABB(pos),
+                s -> s.isAlive() && s.getToiletPos().equals(pos));
         if (!seats.isEmpty()) {
             return seats.getFirst();
         }
@@ -192,8 +194,9 @@ public final class ToiletAddonEvents {
      * 生成方式（TRIGGERED + FACING*0.0625 偏移）补一个。
      */
     private static FlushToiletEntity findOrCreateFlushSeat(ServerLevel level, BlockState state, BlockPos pos) {
+        // 同 findOrCreateSeat：严格限定本方块，防止相邻马桶互锁
         List<FlushToiletEntity> seats = level.getEntitiesOfClass(FlushToiletEntity.class,
-                new AABB(pos), FlushToiletEntity::isAlive);
+                new AABB(pos), e -> e.isAlive() && e.blockPosition().equals(pos));
         if (!seats.isEmpty()) {
             return seats.getFirst();
         }
