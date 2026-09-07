@@ -130,6 +130,11 @@ public final class ToiletAddonEvents {
         boolean ridden = target.startRiding(seat, true);
         if (ridden) {
             target.dropLeash(true, false); // 乘骑成功才解拴绳
+            // 带着一触即发坐下 = 立即触发（马桶路径依赖此调用；厕所路径 SeatEntity.tick 兜底）
+            if (OnTheVergeBridge.tryTrigger((ServerLevel) level, target, pos)) {
+                player.displayClientMessage(
+                        Component.translatable(key("verge", flush), target.getDisplayName()), true);
+            }
         }
         player.displayClientMessage(Component.translatable(
                 key(ridden ? "sit_pokemon" : "ride_failed", flush), target.getDisplayName()), true);

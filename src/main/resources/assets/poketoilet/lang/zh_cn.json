@@ -9,5 +9,7 @@
   "message.poketoilet.ride_failed_toilet": "%s 拒绝上厕所……",
   "message.poketoilet.ride_failed_flush": "%s 拒绝坐上马桶……",
   "message.poketoilet.empty_lead": "附近没有你拴着的生物（先用拴绳拴住宝可梦）",
-  "message.poketoilet.flush_closed": "马桶盖还关着，先掀开马桶盖"
+  "message.poketoilet.flush_closed": "马桶盖还关着，先掀开马桶盖",
+  "message.poketoilet.verge_toilet": "%s 一触即发——厕所被轰了！",
+  "message.poketoilet.verge_flush": "%s 一触即发——马桶被轰了！"
 }

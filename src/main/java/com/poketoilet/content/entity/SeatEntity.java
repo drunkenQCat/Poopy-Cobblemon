@@ -2,6 +2,7 @@ package com.poketoilet.content.entity;
 
 import com.altnoir.poopsky.content.block.abs.AbstractToiletBlock;
 import com.altnoir.poopsky.impl.util.ToiletUtil;
+import com.poketoilet.content.handler.OnTheVergeBridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -83,6 +84,10 @@ public class SeatEntity extends Entity {
         }
 
         if (this.isVehicle() && this.getFirstPassenger() instanceof LivingEntity living) {
+            // 坐着期间被施加“一触即发”（如被泼药水）也能触发；触发会拆掉厕所，下个 tick 自毁
+            if (OnTheVergeBridge.tryTrigger(serverLevel, living, this.toiletPos)) {
+                return;
+            }
             boolean golden = ToiletUtil.isGoldenToilet(this.level(), this.toiletPos);
             ToiletUtil.onPoop(serverLevel, living, false, golden, 0.1F, 0.5F);
         }

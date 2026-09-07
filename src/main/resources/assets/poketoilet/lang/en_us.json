@@ -9,5 +9,7 @@
   "message.poketoilet.ride_failed_toilet": "%s refused to use the toilet...",
   "message.poketoilet.ride_failed_flush": "%s refused to sit on the flush toilet...",
   "message.poketoilet.empty_lead": "No leashed creature nearby (leash a Pokemon first)",
-  "message.poketoilet.flush_closed": "The lid is closed — open it first"
+  "message.poketoilet.flush_closed": "The lid is closed — open it first",
+  "message.poketoilet.verge_toilet": "%s couldn't hold it — the toilet blew!",
+  "message.poketoilet.verge_flush": "%s couldn't hold it — the flush toilet blew!"
 }
