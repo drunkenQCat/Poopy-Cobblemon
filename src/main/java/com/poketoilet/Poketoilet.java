@@ -3,11 +3,15 @@ package com.poketoilet;
 import com.mojang.logging.LogUtils;
 import com.poketoilet.battle.HeldItemBattleEffects;
 import com.poketoilet.content.entity.SeatEntity;
+import com.poketoilet.content.item.ScaleScannerItem;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import org.slf4j.Logger;
 
@@ -42,9 +46,23 @@ public class Poketoilet {
                             .clientTrackingRange(2)
                             .build("seat"));
 
+    public static final DeferredRegister<Item> ITEMS =
+            DeferredRegister.create(Registries.ITEM, MODID);
+
+    /** 体型扫描仪：对宝可梦右键读取体型值（scaleModifier） */
+    public static final Supplier<Item> SCALE_SCANNER =
+            ITEMS.register("scale_scanner", () ->
+                    new ScaleScannerItem(new Item.Properties().stacksTo(1)));
+
     public Poketoilet(IEventBus modEventBus) {
         ENTITY_TYPES.register(modEventBus);
+        ITEMS.register(modEventBus);
         HeldItemBattleEffects.register();
+        modEventBus.addListener((BuildCreativeModeTabContentsEvent event) -> {
+            if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
+                event.accept(SCALE_SCANNER.get());
+            }
+        });
 
         LOGGER.info("Poketoilet 已加载：PoopSkyMod + Cobblemon 附属模组（宝可梦坐马桶产屎）");
     }
