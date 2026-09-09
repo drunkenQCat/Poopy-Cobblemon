@@ -114,6 +114,9 @@ public final class HeldItemBattleEffects {
                 int enemyDamage = Math.max(1, Math.round(size * pokemon.getLevel()));
 
                 applyDamage(self, selfDamage);
+                if (self.getEntity() != null) {
+                    playVergeExplosion(self.getEntity());
+                }
                 for (ActiveBattlePokemon other : battle.getActivePokemon()) {
                     if (other == active) {
                         continue;
@@ -123,6 +126,9 @@ public final class HeldItemBattleEffects {
                         continue;
                     }
                     applyDamage(target, enemyDamage);
+                    if (target.getEntity() != null) {
+                        playVergeExplosion(target.getEntity());
+                    }
                     tellBattle(battle, Component.translatable("message.poketoilet.dragonfruit_trigger",
                             pokemon.getDisplayName(false), selfDamage, target.getName(), enemyDamage));
                 }
@@ -148,5 +154,25 @@ public final class HeldItemBattleEffects {
         int health = Math.max(1, pokemon.getCurrentHealth() - Math.max(1, amount));
         pokemon.setCurrentHealth(health);
         target.sendUpdate();
+    }
+
+    /**
+     * 一触即发触发时的同款爆炸表现：爆闪粒子 + 爆炸音效。
+     * 只做纯表现——不造成伤害、不击退、不破坏方块，避免干扰战斗结算。
+     */
+    private static void playVergeExplosion(net.minecraft.world.entity.Entity at) {
+        if (!(at.level() instanceof net.minecraft.server.level.ServerLevel level) || at.level().isClientSide) {
+            return;
+        }
+        double x = at.getX();
+        double y = at.getY(-0.0625);
+        double z = at.getZ();
+        level.sendParticles(net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER,
+                x, y, z, 1, 0, 0, 0, 0);
+        level.sendParticles(net.minecraft.core.particles.ParticleTypes.POOF,
+                x, y + 0.3, z, 8, 0.3, 0.3, 0.3, 0.02);
+        level.playSound(null, x, y, z,
+                net.minecraft.sounds.SoundEvents.GENERIC_EXPLODE.value(),
+                net.minecraft.sounds.SoundSource.NEUTRAL, 2.0F, 1.0F);
     }
 }
