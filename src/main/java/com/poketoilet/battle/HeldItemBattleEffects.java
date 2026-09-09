@@ -157,8 +157,9 @@ public final class HeldItemBattleEffects {
     }
 
     /**
-     * 一触即发触发时的同款爆炸表现：爆闪粒子 + 爆炸音效。
-     * 只做纯表现——不造成伤害、不击退、不破坏方块，避免干扰战斗结算。
+     * 一触即发触发时的同款爆炸表现：便便粒子爆发（PoopSky 原生 POOP_PARTICLE，
+     * 数量/扩散随体型）+ 爆闪 + 爆炸音效。只做纯表现——不造成伤害、不击退、
+     * 不破坏方块，避免干扰战斗结算。
      */
     private static void playVergeExplosion(net.minecraft.world.entity.Entity at) {
         if (!(at.level() instanceof net.minecraft.server.level.ServerLevel level) || at.level().isClientSide) {
@@ -167,10 +168,23 @@ public final class HeldItemBattleEffects {
         double x = at.getX();
         double y = at.getY(-0.0625);
         double z = at.getZ();
-        level.sendParticles(net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER,
-                x, y, z, 1, 0, 0, 0, 0);
-        level.sendParticles(net.minecraft.core.particles.ParticleTypes.POOF,
-                x, y + 0.3, z, 8, 0.3, 0.3, 0.3, 0.02);
+
+        // 体型越大炸得越猛：半径按线性体型（普通宝可梦≈1）
+        float radius = 1.0F;
+        if (at instanceof com.cobblemon.mod.common.entity.pokemon.PokemonEntity pokemon) {
+            radius = Math.max(1.0F, SizeUtil.linearSize(pokemon));
+        }
+
+        // 与 PoopSky PoopTntUtil.spawnPoopParticle 相同的粒子配方
+        int count = Math.max(1, Math.round(radius * 30));
+        double spread = radius * 0.5;
+        double speed = 0.4 + level.random.nextDouble() * 0.4;
+        level.sendParticles(com.altnoir.poopsky.init.PoParticles.POOP_PARTICLE.get(),
+                x, y, z, count, spread, spread, spread, speed);
+        level.sendParticles(radius <= 2
+                        ? net.minecraft.core.particles.ParticleTypes.EXPLOSION
+                        : net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER,
+                x, y, z, Math.max(1, Math.round(radius)), spread, spread, spread, speed);
         level.playSound(null, x, y, z,
                 net.minecraft.sounds.SoundEvents.GENERIC_EXPLODE.value(),
                 net.minecraft.sounds.SoundSource.NEUTRAL, 2.0F, 1.0F);
