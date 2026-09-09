@@ -11,8 +11,8 @@ import com.cobblemon.mod.common.battles.pokemon.BattlePokemon;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import com.mojang.logging.LogUtils;
 import com.poketoilet.util.SizeUtil;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
@@ -138,9 +138,9 @@ public final class HeldItemBattleEffects {
     }
 
     private static void tellBattle(PokemonBattle battle, Component message) {
-        for (ServerPlayer player : battle.getPlayers()) {
-            player.displayClientMessage(message, true);
-        }
+        // 写入战斗界面的战报文本流：broadcastChatMessage 会通过 BattleMessagePacket
+        // 广播给双方玩家与观战者，并记入战斗的 chatLog
+        battle.broadcastChatMessage(message.copy().withStyle(ChatFormatting.GRAY));
     }
 
     private static void applyDamage(BattlePokemon target, int amount) {
