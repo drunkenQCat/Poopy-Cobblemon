@@ -20,7 +20,8 @@
 2. **玩家坐下**：空手右键 PoopSky 厕所 → 玩家自己坐下持续排便；空手右键马桶
    → 不干预，PoopSky 原生就会让玩家坐上去。
 3. **一触即发桥接**：宝可梦带着 PoopSky 的“一触即发”效果（如被泼对应药水）坐上
-   厕所/马桶时，立即触发（坐着期间被施加也一样，每 tick 检查）：
+   厕所/马桶时，立即触发（坐着期间被施加也一样：厕所走 `SeatEntity.tick`、
+   马桶走 `FlushToiletEntity.tick` 的 Mixin 兜底，均为每 tick）：
    - ANAL_PRESSING 配方命中（矿石压制类特殊方块）→ 与玩家下蹲完全一致：拆厕 + 下方块转换；
      普通厕所（无配方）→ 厕所直接轰碎（掉落本体）；
    - 爆炸走 PoopSky 原生 `PoopTntUtil.triggerExplosion`（不自写爆炸逻辑），半径与
