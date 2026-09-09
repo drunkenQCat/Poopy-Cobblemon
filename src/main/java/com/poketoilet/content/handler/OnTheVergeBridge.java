@@ -27,9 +27,9 @@ import org.slf4j.Logger;
  * <ol>
  *   <li>ANAL_PRESSING 配方匹配（矿石压制类特殊方块）→ 拆厕 + 下方块转换（与玩家一致）；
  *       普通厕所没有配方 → 直接轰碎（掉落本体）；</li>
- *   <li>爆炸走 PoopSky 自己的 {@link PoopTntUtil#triggerExplosion}，
- *       半径由<strong>效果等级</strong>驱动：{@code min(18, 等级 + 2)}——
- *       与效果 tick 的原生行为同一公式，本模组不自写爆炸逻辑。</li>
+ *   <li>爆炸走 PoopSky 自己的 {@link PoopTntUtil#triggerExplosion}（本模组不自写爆炸逻辑），
+ *       半径与<strong>宝可梦体型</strong>挂钩：{@code min(18, max(1, round(2 × 体型)))}——
+ *       体型取 {@code Pokemon.scaleModifier}（体型差异模组写入值），与效果等级无关。</li>
  * </ol>
  * 触发后移除“一触即发”（配方命中时连“肠痉挛”一起移除），天然幂等：
  * 效果被药水反复施加时每次坐厕各触发一次。
@@ -75,16 +75,20 @@ public final class OnTheVergeBridge {
             level.destroyBlock(toiletPos, true, entity);
         }
 
-        // 爆炸交给 PoopSky 自己的等级公式：min(18, 等级 + 2)
-        int radius = Math.min(18, verge.getAmplifier() + 2);
+        // 爆炸交给 PoopSky 自己的 triggerExplosion，半径随宝可梦体型缩放
+        float scale = 1.0F;
+        if (entity instanceof PokemonEntity pokemon) {
+            scale = Math.max(0.1F, Math.abs(pokemon.getPokemon().getScaleModifier()));
+        }
+        int radius = Math.min(18, Math.max(1, Math.round(2 * scale)));
         PoopTntUtil.triggerExplosion(entity, radius);
 
         entity.removeEffect(PoEffects.ON_THE_VERGE);
         if (matched) {
             entity.removeEffect(PoEffects.INTESTINAL_SPASM);
         }
-        LOGGER.info("[Poketoilet] {} 触发一触即发 @ {}，等级 {}，侵染半径 {}",
-                entity.getName().getString(), toiletPos, verge.getAmplifier(), radius);
+        LOGGER.info("[Poketoilet] {} 触发一触即发 @ {}，体型 x{}，侵染半径 {}",
+                entity.getName().getString(), toiletPos, scale, radius);
         return true;
     }
 }

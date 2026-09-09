@@ -23,8 +23,9 @@
    厕所/马桶时，立即触发（坐着期间被施加也一样，每 tick 检查）：
    - ANAL_PRESSING 配方命中（矿石压制类特殊方块）→ 与玩家下蹲完全一致：拆厕 + 下方块转换；
      普通厕所（无配方）→ 厕所直接轰碎（掉落本体）；
-   - 爆炸走 PoopSky 原生 `PoopTntUtil.triggerExplosion`，半径由**效果等级**驱动：
-     `min(18, 等级 + 2)`，与效果 tick 的原生公式一致（等级越高炸得越大）。
+   - 爆炸走 PoopSky 原生 `PoopTntUtil.triggerExplosion`（不自写爆炸逻辑），半径与
+     **宝可梦体型**挂钩：`min(18, max(1, round(2 × 体型)))`，体型 =
+     `Pokemon.scaleModifier`（体型差异模组写入值），与效果等级无关。
 4. **携带物品战斗效果**（PoopSky 物品 + Cobblemon 战斗）：
    - **番泻叶**（`poopsky:folium_sennae`）：携带后每次使用任意技能（消耗 PP），
      敌方所有出战宝可梦速度阶级 -1，可叠加至 -6。实现：Mixin 挂 Cobblemon
