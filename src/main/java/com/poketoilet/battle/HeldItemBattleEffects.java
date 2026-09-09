@@ -11,6 +11,8 @@ import com.cobblemon.mod.common.battles.pokemon.BattlePokemon;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import com.mojang.logging.LogUtils;
 import com.poketoilet.util.SizeUtil;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
@@ -72,6 +74,8 @@ public final class HeldItemBattleEffects {
                 int next = Math.max(-6, target.getStatChanges().getOrDefault(Stats.SPEED, 0) - 1);
                 target.getStatChanges().put(Stats.SPEED, next);
                 target.sendUpdate();
+                tellBattle(battle, Component.translatable("message.poketoilet.senna_trigger",
+                        target.getName(), instruction.getMove().getName()));
             }
             LOGGER.info("[Poketoilet] {} 携带番泻叶使用技能，敌方速度下降（技能 {}）",
                     pokemon.getDisplayName(false).getString(), instruction.getMove().getName());
@@ -80,16 +84,24 @@ public final class HeldItemBattleEffects {
         }
     }
 
-    /** 帝王火龙果：进入战斗 → 自伤 1% 最大生命，敌方按 体型 × 等级 扣血 */
+    /** 帝王火龙果：进入战斗 → 自伤 1% 最大生命，敌方按 线性体型 × 等级 扣血 */
     private static void onBattleStarted(BattleStartedEvent.Post event) {
         try {
             PokemonBattle battle = event.getBattle();
+            StringBuilder actives = new StringBuilder();
             for (ActiveBattlePokemon active : battle.getActivePokemon()) {
                 BattlePokemon self = active.getBattlePokemon();
                 if (self == null) {
                     continue;
                 }
                 Pokemon pokemon = self.getEffectedPokemon();
+                // 诊断：参战位与携带物一览，用于确认“装错装饰栏/没带上”类问题
+                if (actives.length() > 0) {
+                    actives.append(", ");
+                }
+                actives.append(pokemon == null ? "?" : pokemon.getDisplayName(false).getString())
+                        .append("[携带=").append(pokemon == null || pokemon.heldItem().isEmpty()
+                                ? "无" : pokemon.heldItem().getItem()).append(']');
                 if (pokemon == null || !isHolding(pokemon, PoItems.KING_OF_DRAGON_FRUIT.get())) {
                     continue;
                 }
@@ -111,12 +123,23 @@ public final class HeldItemBattleEffects {
                         continue;
                     }
                     applyDamage(target, enemyDamage);
+                    tellBattle(battle, Component.translatable("message.poketoilet.dragonfruit_trigger",
+                            pokemon.getDisplayName(false), selfDamage, target.getName(), enemyDamage));
                 }
                 LOGGER.info("[Poketoilet] {} 携带帝王火龙果进入战斗：自损 {} HP，敌方各损 {} HP（体型边长 x{}，等级 {}）",
                         pokemon.getDisplayName(false).getString(), selfDamage, enemyDamage, size, pokemon.getLevel());
             }
+            if (actives.length() > 0) {
+                LOGGER.info("[Poketoilet] 战斗开始，参战位：{}", actives);
+            }
         } catch (Exception e) {
             LOGGER.error("[Poketoilet] 帝王火龙果效果处理失败", e);
+        }
+    }
+
+    private static void tellBattle(PokemonBattle battle, Component message) {
+        for (ServerPlayer player : battle.getPlayers()) {
+            player.displayClientMessage(message, true);
         }
     }
 
