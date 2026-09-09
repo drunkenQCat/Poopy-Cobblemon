@@ -29,6 +29,9 @@
      ∛(碰撞箱体积)（`SizeUtil`），种族基础体型与倍率都体现在碰撞箱里，
      巨浪鼬和小碎钻有数量级差异，与效果等级无关。
 4. **携带物品战斗效果**（PoopSky 物品 + Cobblemon 战斗）：
+   - 两件物品已通过 `data/cobblemon/tags/item/held/is_held_item.json` 加入
+     Cobblemon 的携带白名单标签 `#cobblemon:held/is_held_item`（`"replace": false`
+     合并，不影响官方携带物）。
    - **番泻叶**（`poopsky:folium_sennae`）：携带后每次使用任意技能（消耗 PP），
      敌方所有出战宝可梦速度阶级 -1，可叠加至 -6。实现：Mixin 挂 Cobblemon
      `MoveInstruction.invoke`（Cobblemon 无公开"使用技能"事件）。
