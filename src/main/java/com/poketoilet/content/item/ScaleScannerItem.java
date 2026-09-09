@@ -1,6 +1,7 @@
 package com.poketoilet.content.item;
 
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity;
+import com.poketoilet.util.SizeUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
@@ -14,11 +15,9 @@ import net.minecraft.world.item.TooltipFlag;
 import java.util.List;
 
 /**
- * 体型扫描仪：对宝可梦（{@link PokemonEntity}）右键，读取其体型值并展示。
- *
- * <p>体型即 {@code Pokemon.getScaleModifier()}——体型差异模组
- * （CobblemonSizeVariation）写入的缩放系数，也是一触即发侵染半径、
- * 帝王火龙果伤害所使用的同一数值。非宝可梦实体直接 PASS，不干扰原版交互。
+ * 体型扫描仪：对宝可梦（{@link PokemonEntity}）右键，读取其碰撞箱体积与
+ * 等效边长（见 {@link SizeUtil}），倍率（scaleModifier）作参考值一并列出。
+ * 非宝可梦实体直接 PASS，不干扰原版交互。
  */
 public class ScaleScannerItem extends Item {
 
@@ -32,10 +31,12 @@ public class ScaleScannerItem extends Item {
             return InteractionResult.PASS; // 不是宝可梦：交给原版/其他模组处理
         }
         if (!player.level().isClientSide) {
-            float scale = pokemonEntity.getPokemon().getScaleModifier();
+            float volume = SizeUtil.volume(pokemonEntity);
+            float edge = (float) Math.cbrt(volume);
             player.displayClientMessage(Component.translatable("message.poketoilet.scan_result",
                     pokemonEntity.getPokemon().getDisplayName(false),
-                    String.format("%.3f", scale)), false);
+                    String.format("%.2f", volume), String.format("%.2f", edge),
+                    String.format("%.3f", pokemonEntity.getPokemon().getScaleModifier())), false);
         }
         return InteractionResult.sidedSuccess(player.level().isClientSide);
     }

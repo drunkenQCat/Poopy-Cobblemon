@@ -10,6 +10,7 @@ import com.cobblemon.mod.common.battles.interpreter.instructions.MoveInstruction
 import com.cobblemon.mod.common.battles.pokemon.BattlePokemon;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import com.mojang.logging.LogUtils;
+import com.poketoilet.util.SizeUtil;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
@@ -24,8 +25,8 @@ import org.slf4j.Logger;
  *       {@code MoveInstruction.invoke} 上——Cobblemon 没有公开“使用技能”事件。</li>
  *   <li><strong>帝王火龙果</strong>（{@code poopsky:king_of_dragon_fruit}）：每次进入战斗
  *       （{@code BATTLE_STARTED_POST}），对自己造成固定 1% 最大生命的伤害，对敌方每只
- *       出战宝可梦造成 {@code 体型 × 等级} 点伤害（体型取 {@code Pokemon.scaleModifier}，
- *       即体型差异模组写入的体型）。</li>
+ *       出战宝可梦造成 {@code 线性体型 × 等级} 点伤害（线性体型 = 碰撞箱体积的等效
+ *       立方边长，见 {@link SizeUtil}；种族差异直接体现）。</li>
  * </ul>
  *
  * <p>扣血直接写 {@code Pokemon.setCurrentHealth} 并 {@code sendUpdate} 同步 UI；
@@ -92,9 +93,13 @@ public final class HeldItemBattleEffects {
                 if (pokemon == null || !isHolding(pokemon, PoItems.KING_OF_DRAGON_FRUIT.get())) {
                     continue;
                 }
-                float scale = Math.max(0.1F, Math.abs(pokemon.getScaleModifier()));
+                // 线性体型：碰撞箱体积的等效立方边长（种族差异 + 倍率都体现在碰撞箱里）
+                float size = 1.0F;
+                if (self.getEntity() != null) {
+                    size = Math.max(0.1F, SizeUtil.linearSize(self.getEntity()));
+                }
                 int selfDamage = Math.max(1, Math.round(self.getMaxHealth() * 0.01F));
-                int enemyDamage = Math.max(1, Math.round(scale * pokemon.getLevel()));
+                int enemyDamage = Math.max(1, Math.round(size * pokemon.getLevel()));
 
                 applyDamage(self, selfDamage);
                 for (ActiveBattlePokemon other : battle.getActivePokemon()) {
@@ -107,8 +112,8 @@ public final class HeldItemBattleEffects {
                     }
                     applyDamage(target, enemyDamage);
                 }
-                LOGGER.info("[Poketoilet] {} 携带帝王火龙果进入战斗：自损 {} HP，敌方各损 {} HP（体型 x{}，等级 {}）",
-                        pokemon.getDisplayName(false).getString(), selfDamage, enemyDamage, scale, pokemon.getLevel());
+                LOGGER.info("[Poketoilet] {} 携带帝王火龙果进入战斗：自损 {} HP，敌方各损 {} HP（体型边长 x{}，等级 {}）",
+                        pokemon.getDisplayName(false).getString(), selfDamage, enemyDamage, size, pokemon.getLevel());
             }
         } catch (Exception e) {
             LOGGER.error("[Poketoilet] 帝王火龙果效果处理失败", e);

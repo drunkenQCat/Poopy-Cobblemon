@@ -7,6 +7,7 @@ import com.altnoir.poopsky.init.PoEffects;
 import com.altnoir.poopsky.init.PoRecipes;
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity;
 import com.mojang.logging.LogUtils;
+import com.poketoilet.util.SizeUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -28,8 +29,8 @@ import org.slf4j.Logger;
  *   <li>ANAL_PRESSING 配方匹配（矿石压制类特殊方块）→ 拆厕 + 下方块转换（与玩家一致）；
  *       普通厕所没有配方 → 直接轰碎（掉落本体）；</li>
  *   <li>爆炸走 PoopSky 自己的 {@link PoopTntUtil#triggerExplosion}（本模组不自写爆炸逻辑），
- *       半径与<strong>宝可梦体型</strong>挂钩：{@code min(18, max(1, round(2 × 体型)))}——
- *       体型取 {@code Pokemon.scaleModifier}（体型差异模组写入值），与效果等级无关。</li>
+ *       半径与<strong>宝可梦体型</strong>挂钩：{@code min(18, max(1, round(2 × 等效边长)))}——
+ *       等效边长 = ∛(碰撞箱体积)，种族基础体型与倍率都体现在其中，与效果等级无关。</li>
  * </ol>
  * 触发后移除“一触即发”（配方命中时连“肠痉挛”一起移除），天然幂等：
  * 效果被药水反复施加时每次坐厕各触发一次。
@@ -75,20 +76,21 @@ public final class OnTheVergeBridge {
             level.destroyBlock(toiletPos, true, entity);
         }
 
-        // 爆炸交给 PoopSky 自己的 triggerExplosion，半径随宝可梦体型缩放
-        float scale = 1.0F;
+        // 爆炸交给 PoopSky 自己的 triggerExplosion，半径随“线性体型”（碰撞箱
+        // 体积的等效边长，种族差异直接体现）缩放
+        float size = 1.0F;
         if (entity instanceof PokemonEntity pokemon) {
-            scale = Math.max(0.1F, Math.abs(pokemon.getPokemon().getScaleModifier()));
+            size = Math.max(0.1F, SizeUtil.linearSize(pokemon));
         }
-        int radius = Math.min(18, Math.max(1, Math.round(2 * scale)));
+        int radius = Math.min(18, Math.max(1, Math.round(2 * size)));
         PoopTntUtil.triggerExplosion(entity, radius);
 
         entity.removeEffect(PoEffects.ON_THE_VERGE);
         if (matched) {
             entity.removeEffect(PoEffects.INTESTINAL_SPASM);
         }
-        LOGGER.info("[Poketoilet] {} 触发一触即发 @ {}，体型 x{}，侵染半径 {}",
-                entity.getName().getString(), toiletPos, scale, radius);
+        LOGGER.info("[Poketoilet] {} 触发一触即发 @ {}，体型(边长) x{}，侵染半径 {}",
+                entity.getName().getString(), toiletPos, size, radius);
         return true;
     }
 }

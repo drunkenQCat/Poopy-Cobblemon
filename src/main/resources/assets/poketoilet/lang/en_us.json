@@ -2,7 +2,7 @@
   "entity.poketoilet.seat": "Toilet Seat",
   "item.poketoilet.scale_scanner": "Size Scanner",
   "tooltip.poketoilet.scale_scanner": "Use on a Pokemon to read its size",
-  "message.poketoilet.scan_result": "%s's size: x%s",
+  "message.poketoilet.scan_result": "%s: volume %s blocks³ (edge ≈ %s, modifier x%s)",
   "message.poketoilet.sit_pokemon_toilet": "%s squatted over the toilet and started pushing...",
   "message.poketoilet.sit_pokemon_flush": "%s hopped onto the flush toilet and started pushing...",
   "message.poketoilet.sit_self_toilet": "You squatted over the toilet",

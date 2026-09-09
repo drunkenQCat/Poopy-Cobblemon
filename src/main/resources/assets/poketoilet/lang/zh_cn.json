@@ -2,7 +2,7 @@
   "entity.poketoilet.seat": "厕所座椅",
   "item.poketoilet.scale_scanner": "体型扫描仪",
   "tooltip.poketoilet.scale_scanner": "对宝可梦使用，读取其体型值",
-  "message.poketoilet.scan_result": "%s 的体型：x%s",
+  "message.poketoilet.scan_result": "%s：体积 %s 方块³（等效边长 %s，倍率 x%s）",
   "message.poketoilet.sit_pokemon_toilet": "%s 蹲上了厕所，开始用力……",
   "message.poketoilet.sit_pokemon_flush": "%s 跳上了马桶，开始用力……",
   "message.poketoilet.sit_self_toilet": "你蹲上了厕所",
