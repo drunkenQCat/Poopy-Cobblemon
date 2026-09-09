@@ -18,8 +18,8 @@ import java.util.function.Supplier;
  *
  * <p>让 Cobblemon 宝可梦（或其他可拴绳的生物）坐上 PoopSkyMod 的厕所方块：
  * <ul>
- *   <li>手持拴绳右键 PoopSky 的厕所 → 附近该玩家拴着的宝可梦被牵过来坐上隐形座椅，
- *       并持续调用 PoopSky 自身的排便逻辑产出它的“大便”；</li>
+ *   <li>拴住宝可梦后右键厕所（手上拿什么都行，判定依据是拴绳状态）→ 宝可梦被牵过来
+ *       坐上隐形座椅，并持续调用 PoopSky 自身的排便逻辑产出它的“大便”；</li>
  *   <li>空手右键 PoopSky 的厕所 → 玩家自己坐下，同样持续排便；</li>
  *   <li>玩家蹲在 PoopSky 厕所上按 Shift 是 PoopSky 原版机制，本模组不干预。</li>
  * </ul>

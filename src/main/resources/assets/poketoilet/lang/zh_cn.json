@@ -3,7 +3,6 @@
   "message.poketoilet.sit_pokemon_toilet": "%s 蹲上了厕所，开始用力……",
   "message.poketoilet.sit_pokemon_flush": "%s 跳上了马桶，开始用力……",
   "message.poketoilet.sit_self_toilet": "你蹲上了厕所",
-  "message.poketoilet.sit_self_flush": "你坐上了马桶",
   "message.poketoilet.toilet_occupied_toilet": "这个厕所已经有人了",
   "message.poketoilet.toilet_occupied_flush": "这个马桶已经有人了",
   "message.poketoilet.ride_failed_toilet": "%s 拒绝上厕所……",

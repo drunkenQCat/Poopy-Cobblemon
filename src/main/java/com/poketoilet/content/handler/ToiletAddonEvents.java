@@ -130,14 +130,15 @@ public final class ToiletAddonEvents {
         boolean ridden = target.startRiding(seat, true);
         if (ridden) {
             target.dropLeash(true, false); // 乘骑成功才解拴绳
-            // 带着一触即发坐下 = 立即触发（马桶路径依赖此调用；厕所路径 SeatEntity.tick 兜底）
-            if (OnTheVergeBridge.tryTrigger((ServerLevel) level, target, pos)) {
-                player.displayClientMessage(
-                        Component.translatable(key("verge", flush), target.getDisplayName()), true);
-            }
+            // 带着一触即发坐下 = 立即触发（马桶路径依赖此调用；厕所路径 SeatEntity.tick 兜底）。
+            // 触发时只发“一触即发”消息：同为 actionbar，再发坐厕消息会立刻覆盖它
+            boolean triggered = OnTheVergeBridge.tryTrigger((ServerLevel) level, target, pos);
+            player.displayClientMessage(Component.translatable(
+                    key(triggered ? "verge" : "sit_pokemon", flush), target.getDisplayName()), true);
+        } else {
+            player.displayClientMessage(Component.translatable(
+                    key("ride_failed", flush), target.getDisplayName()), true);
         }
-        player.displayClientMessage(Component.translatable(
-                key(ridden ? "sit_pokemon" : "ride_failed", flush), target.getDisplayName()), true);
         LOGGER.info("[Poketoilet] {} 手持拴绳右键{} {}，目标 {}，startRiding(force)={}",
                 player.getName().getString(), flush ? "马桶" : "厕所", pos,
                 target.getName().getString(), ridden);
@@ -153,7 +154,11 @@ public final class ToiletAddonEvents {
             event.setCanceled(true);
             return;
         }
-        player.startRiding(seat);
+        // 玩家已骑乘其他载具等情况下无法入座：静默取消，不发成功消息
+        if (!player.startRiding(seat)) {
+            event.setCanceled(true);
+            return;
+        }
         player.displayClientMessage(Component.translatable(key("sit_self", false)), true);
         LOGGER.info("[Poketoilet] {} 空手坐上厕所 {}", player.getName().getString(), pos);
         event.setCanceled(true);

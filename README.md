@@ -35,6 +35,8 @@
      （体型 = `Pokemon.scaleModifier`，即体型差异模组的体型值）。
    - 两种扣血一律**保底留 1 HP**：战斗血量权威在 Showdown 引擎，直接打至 0 会
      脱同步；"恶系"为风味设定，实际按上述固定公式结算。
+   - ⚠️ 定性：扣血/降速改的是 Cobblemon 侧数值，Showdown 引擎不知情——属于
+     **UI 层装饰效果**，引擎结算时显示数值可能回跳（review 结论：可接受）。
 5. **原版机制不受影响**：玩家站在 PoopSky 厕所上按 Shift 蹲坑，本来就是 PoopSky 自带功能，本模组不干预。
 
 ## 依赖（`mods.toml` 均为 required）
@@ -43,7 +45,7 @@
 |---|---|---|
 | neoforge | [21.1.240,) | 必装 |
 | minecraft | [1.21.1,1.22) | 必装 |
-| **poopsky** | [2.1.3,) | 整合包内已有 `poopsky-2.1.3+NeoForge1.21.1-hotfix.jar` |
+| **poopsky** | [2.2,) | 整合包内已有 `poopsky-2.2+NeoForge1.21.1-Hotfix2.jar` |
 | **cobblemon** | [1.7.0,) | 整合包内已有 `Cobblemon-neoforge-1.7.3+1.21.1.jar` |
 
 ## 工作原理（源码导读）
@@ -72,7 +74,7 @@ src/main/java/com/poketoilet/
 ## 构建
 
 **依赖来源**：`dev/libs/` 里是从整合包 `minecraft/mods/` 复制进来的 jar
-（`poopsky-2.1.3.jar`、`cobblemon-1.7.3.jar`、`kotlinforforge-5.12.0-all.jar`），
+（`poopsky-2.2+NeoForge1.21.1-Hotfix2.jar`、`cobblemon-1.7.3.jar`、`kotlinforforge-5.12.0-all.jar`），
 以 **compileOnly** 引入（只编译不打包；运行时由整合包里的本体提供）。
 Cobblemon 本体是 Kotlin 写的，编译期需要 Kotlin runtime（kotlinforforge 提供）。
 如果以后整合包升级了这两个模组，把新 jar 覆盖到 `dev/libs/` 同名即可。

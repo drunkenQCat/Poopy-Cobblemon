@@ -73,21 +73,23 @@ public class SeatEntity extends Entity {
             return;
         }
 
-        // 一触即发桥接：每 tick 检查（药水效果可能只存在几十 tick，放在排便闸门内会漏掉）。
-        // 触发会轰掉厕所，下个 tick 底下不再是厕所方块 -> 自毁弹出乘客
+        // 底下不再是 PoopSky 的厕所 -> 自毁（乘客会脱离）。
+        // 必须每 tick 检查且优先于一切逻辑：防止厕所被拆后座椅残留 2 秒的
+        // “僵尸期”里，一触即发等效果对已消失的厕所错位触发
+        BlockState state = this.level().getBlockState(this.toiletPos);
+        if (!(state.getBlock() instanceof AbstractToiletBlock)) {
+            this.discard();
+            return;
+        }
+
+        // 一触即发桥接：每 tick 检查（药水效果可能只存在几十 tick，不能放进排便闸门）。
+        // 触发会轰掉厕所，下个 tick 走上面的自毁分支弹出乘客
         if (this.isVehicle() && this.getFirstPassenger() instanceof LivingEntity living
                 && OnTheVergeBridge.tryTrigger(serverLevel, living, this.toiletPos)) {
             return;
         }
 
         if (this.tickCount % POOP_COOLDOWN != 0) {
-            return;
-        }
-
-        BlockState state = this.level().getBlockState(this.toiletPos);
-        if (!(state.getBlock() instanceof AbstractToiletBlock)) {
-            // 底下不再是 PoopSky 的厕所 -> 自毁（乘客会脱离）
-            this.discard();
             return;
         }
 
