@@ -75,6 +75,7 @@ public final class HeldItemBattleEffects {
 
     /** 由 BattleTickHooks 在服务端 tick 调用：轮询补判待处理的战斗 */
     public static void tickPending() {
+        ShowdownPatchLoader.ensurePatched();
         if (PENDING.isEmpty()) {
             return;
         }
@@ -130,7 +131,8 @@ public final class HeldItemBattleEffects {
                 int selfDamage = Math.max(1, Math.round(self.getMaxHealth() * 0.01F));
                 int enemyDamage = Math.max(1, Math.round(size * pokemon.getLevel()));
 
-                applyDamage(self, selfDamage);
+                // 伤害交由引擎原生结算（保底 1 HP 的钳制在补丁 JS 里）
+                sendLine(battle, "poketoilet_dragonfruit", self.getUuid(), selfDamage);
                 if (self.getEntity() != null) {
                     playVergeExplosion(self.getEntity());
                 }
@@ -142,7 +144,7 @@ public final class HeldItemBattleEffects {
                     if (target == null || target.getActor() == self.getActor()) {
                         continue;
                     }
-                    applyDamage(target, enemyDamage);
+                    sendLine(battle, "poketoilet_dragonfruit", target.getUuid(), enemyDamage);
                     if (target.getEntity() != null) {
                         playVergeExplosion(target.getEntity());
                     }
@@ -164,9 +166,13 @@ public final class HeldItemBattleEffects {
         }
     }
 
-    /** 番泻叶：每次技能使用 → 敌方速度阶级 -1 */
+    /** 番泻叶：每次技能使用 → 敌方速度阶级 -1（引擎原生 boost） */
     public static void onMoveUsed(MoveInstruction instruction, PokemonBattle battle) {
         try {
+            ShowdownPatchLoader.ensurePatched();
+            if (!ShowdownPatchLoader.isPatched()) {
+                return; // 补丁未注入时引擎侧效果不可用
+            }
             BattlePokemon user = instruction.getUserPokemon();
             if (user == null) {
                 return;
@@ -180,9 +186,7 @@ public final class HeldItemBattleEffects {
                 if (target == null || target.getActor() == user.getActor()) {
                     continue;
                 }
-                int next = Math.max(-6, target.getStatChanges().getOrDefault(Stats.SPEED, 0) - 1);
-                target.getStatChanges().put(Stats.SPEED, next);
-                target.sendUpdate();
+                sendLine(battle, "poketoilet_senna", target.getUuid(), 1);
                 tellBattle(battle, Component.translatable("message.poketoilet.senna_trigger",
                         target.getName(), instruction.getMove().getName()));
             }
@@ -193,11 +197,14 @@ public final class HeldItemBattleEffects {
         }
     }
 
-    private static void applyDamage(BattlePokemon target, int amount) {
-        Pokemon pokemon = target.getEffectedPokemon();
-        int health = Math.max(1, pokemon.getCurrentHealth() - Math.max(1, amount));
-        pokemon.setCurrentHealth(health);
-        target.sendUpdate();
+    /**
+     * MonsterTrainer 模式的触发通道：通过 {@code ShowdownService.send} 写入自定义
+     * 协议行（{@code >行名 JSON}），由注入的补丁 JS 拦截后用引擎原生 API 结算。
+     */
+    private static void sendLine(PokemonBattle battle, String type, UUID targetUuid, int amount) {
+        com.cobblemon.mod.common.battles.runner.ShowdownService.Companion.getService()
+                .send(battle.getBattleId(),
+                        new String[]{">" + type + " {\"target\":\"" + targetUuid + "\",\"amount\":" + amount + "}"});
     }
 
     /**
