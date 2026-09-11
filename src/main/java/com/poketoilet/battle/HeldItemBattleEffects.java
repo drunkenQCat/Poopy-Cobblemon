@@ -44,7 +44,9 @@ public final class HeldItemBattleEffects {
             return;
         }
         ExtEvents.MOVE_USED.add(HeldItemBattleEffects::onMoveUsed);
-        ExtEvents.BATTLE_ACTIVE_READY.add(HeldItemBattleEffects::onBattleActive);
+        java.util.function.Consumer<com.cobblemon.mod.common.api.events.pokemon.PokemonSentEvent.Post> sentHandler =
+                event -> onPokemonSent(event.getPokemon());
+        com.cobblemon.mod.common.api.events.CobblemonEvents.POKEMON_SENT_POST.subscribe(sentHandler);
         LOGGER.info("[Poketoilet] 携带物品战斗效果已注册（番泻叶 / 帝王火龙果）");
     }
 
@@ -78,49 +80,69 @@ public final class HeldItemBattleEffects {
         }
     }
 
-    /** 帝王火龙果：进入战斗（参战位就绪）→ 自伤 1% 最大生命，敌方按 线性体型 × 等级 扣血 */
-    private static void onBattleActive(PokemonBattle battle) {
+    /**
+     * 帝王火龙果：宝可梦被派上场（“去吧！”之后，{@code POKEMON_SENT_POST}）时触发。
+     * 自身固定损失 1% 最大生命，敌方每只出战宝可梦受到
+     * {@code 线性体型 × 等级} 点引擎真实伤害（保底留 1 HP），并播放爆炸动画。
+     * 中途换上场也会触发（每次上场都算一次进入战斗）。
+     */
+    private static void onPokemonSent(Pokemon pokemon) {
         try {
             ExtBridge.ensurePatched();
-            for (ActiveBattlePokemon active : battle.getActivePokemon()) {
-                BattlePokemon self = active.getBattlePokemon();
-                if (self == null) {
-                    continue;
-                }
-                Pokemon pokemon = self.getEffectedPokemon();
-                if (pokemon == null || !isHolding(pokemon, PoItems.KING_OF_DRAGON_FRUIT.get())) {
-                    continue;
-                }
-                float size = 1.0F;
-                if (self.getEntity() != null) {
-                    size = Math.max(0.1F, SizeUtil.linearSize(self.getEntity()));
-                }
-                int selfDamage = Math.max(1, Math.round(self.getMaxHealth() * 0.01F));
-                int enemyDamage = Math.max(1, Math.round(size * pokemon.getLevel()));
-
-                // 伤害交由引擎原生结算（保底 1 HP 的钳制在库补丁 JS 里）
-                ExtBridge.applyDamage(battle, self.getUuid(), selfDamage);
-                if (self.getEntity() != null) {
-                    playVergeExplosion(self.getEntity());
-                }
-                for (ActiveBattlePokemon other : battle.getActivePokemon()) {
-                    if (other == active) {
-                        continue;
-                    }
-                    BattlePokemon target = other.getBattlePokemon();
-                    if (target == null || target.getActor() == self.getActor()) {
-                        continue;
-                    }
-                    ExtBridge.applyDamage(battle, target.getUuid(), enemyDamage);
-                    if (target.getEntity() != null) {
-                        playVergeExplosion(target.getEntity());
-                    }
-                    tellBattle(battle, Component.translatable("message.poketoilet.dragonfruit_trigger",
-                            pokemon.getDisplayName(false), selfDamage, target.getName(), enemyDamage));
-                }
-                LOGGER.info("[Poketoilet] {} 携带帝王火龙果进入战斗：自损 {} HP，敌方各损 {} HP（体型边长 x{}，等级 {}）",
-                        pokemon.getDisplayName(false).getString(), selfDamage, enemyDamage, size, pokemon.getLevel());
+            if (!ExtBridge.isPatched()) {
+                return;
             }
+            net.minecraft.server.level.ServerPlayer owner = pokemon.getOwnerPlayer();
+            if (owner == null) {
+                return; // 野生/无主宝可梦不触发
+            }
+            var battle = com.cobblemon.mod.common.battles.BattleRegistry
+                    .getBattleByParticipatingPlayer(owner);
+            if (battle == null || battle.getEnded()) {
+                return;
+            }
+            if (!isHolding(pokemon, PoItems.KING_OF_DRAGON_FRUIT.get())) {
+                return;
+            }
+
+            BattlePokemon self = null;
+            for (ActiveBattlePokemon active : battle.getActivePokemon()) {
+                BattlePokemon bp = active.getBattlePokemon();
+                if (bp != null && bp.getEffectedPokemon() == pokemon) {
+                    self = bp;
+                    break;
+                }
+            }
+            if (self == null) {
+                return;
+            }
+
+            float size = 1.0F;
+            if (self.getEntity() != null) {
+                size = Math.max(0.1F, SizeUtil.linearSize(self.getEntity()));
+            }
+            int selfDamage = Math.max(1, Math.round(self.getMaxHealth() * 0.01F));
+            int enemyDamage = Math.max(1, Math.round(size * pokemon.getLevel()));
+
+            // 伤害交由引擎原生结算（保底 1 HP 的钳制在库补丁 JS 里）
+            ExtBridge.applyDamage(battle, self.getUuid(), selfDamage);
+            if (self.getEntity() != null) {
+                playVergeExplosion(self.getEntity());
+            }
+            for (ActiveBattlePokemon other : battle.getActivePokemon()) {
+                BattlePokemon target = other.getBattlePokemon();
+                if (target == null || target.getActor() == self.getActor()) {
+                    continue;
+                }
+                ExtBridge.applyDamage(battle, target.getUuid(), enemyDamage);
+                if (target.getEntity() != null) {
+                    playVergeExplosion(target.getEntity());
+                }
+                tellBattle(battle, Component.translatable("message.poketoilet.dragonfruit_trigger",
+                        pokemon.getDisplayName(false), selfDamage, target.getName(), enemyDamage));
+            }
+            LOGGER.info("[Poketoilet] {} 携带帝王火龙果上场：自损 {} HP，敌方各损 {} HP（体型边长 x{}，等级 {}）",
+                    pokemon.getDisplayName(false).getString(), selfDamage, enemyDamage, size, pokemon.getLevel());
         } catch (Exception e) {
             LOGGER.error("[Poketoilet] 帝王火龙果效果处理失败", e);
         }
