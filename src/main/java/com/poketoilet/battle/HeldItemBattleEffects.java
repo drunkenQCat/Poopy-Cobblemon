@@ -89,19 +89,20 @@ public final class HeldItemBattleEffects {
     private static void onPokemonSent(Pokemon pokemon) {
         try {
             ExtBridge.ensurePatched();
-            if (!ExtBridge.isPatched()) {
-                return;
-            }
             net.minecraft.server.level.ServerPlayer owner = pokemon.getOwnerPlayer();
-            if (owner == null) {
-                return; // 野生/无主宝可梦不触发
-            }
-            var battle = com.cobblemon.mod.common.battles.BattleRegistry
-                    .getBattleByParticipatingPlayer(owner);
-            if (battle == null || battle.getEnded()) {
+            var battle = owner == null ? null
+                    : com.cobblemon.mod.common.battles.BattleRegistry
+                            .getBattleByParticipatingPlayer(owner);
+            boolean inBattle = battle != null && !battle.getEnded();
+            boolean holding = isHolding(pokemon, PoItems.KING_OF_DRAGON_FRUIT.get());
+            LOGGER.info("[Poketoilet] 出球事件：{} owner={} 在战斗中={} 携带火龙果={} 补丁={}",
+                    pokemon.getDisplayName(false).getString(), owner != null, inBattle, holding,
+                    ExtBridge.isPatched());
+            if (!inBattle || !holding) {
                 return;
             }
-            if (!isHolding(pokemon, PoItems.KING_OF_DRAGON_FRUIT.get())) {
+            if (!ExtBridge.isPatched()) {
+                LOGGER.info("[Poketoilet] 引擎补丁未注入，跳过帝王火龙果触发");
                 return;
             }
 
@@ -114,6 +115,7 @@ public final class HeldItemBattleEffects {
                 }
             }
             if (self == null) {
+                LOGGER.info("[Poketoilet] {} 在战斗中但未找到对应参战位", pokemon.getDisplayName(false).getString());
                 return;
             }
 
