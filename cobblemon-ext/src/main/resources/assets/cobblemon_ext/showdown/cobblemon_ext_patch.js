@@ -3,6 +3,17 @@
     return;
   }
 
+  // 自诊断状态：Java 侧可通过 bindings 回读并写入日志
+  globalThis.__cobblemonExtStatus = {
+    patched: true,
+    requireError: '',
+    linesSeen: 0,
+    linesByType: {},
+    applied: [],
+    lastError: ''
+  };
+  var status = globalThis.__cobblemonExtStatus;
+
   var sim = null;
   var requireErrors = [];
   var candidates = ['./sim/index', 'sim/index', './sim/index.js', './showdown/sim/index'];
@@ -15,7 +26,8 @@
     }
   }
   if (!sim || !sim.Battle) {
-    throw new Error('cobblemon-ext patch: cannot require sim/index — ' + requireErrors.join(' | '));
+    status.requireError = requireErrors.join(' | ');
+    throw new Error('cobblemon-ext patch: cannot require sim/index — ' + status.requireError);
   }
 
   var BattleStream = sim.BattleStream;
@@ -36,10 +48,20 @@
 
   var _writeLine = BattleStream.prototype._writeLine;
   BattleStream.prototype._writeLine = function (type, message) {
+    try {
+      status.linesSeen++;
+      status.linesByType[type] = (status.linesByType[type] || 0) + 1;
+    } catch (e) { }
+
     if (type === 'cobblemonext_boost') {
       try {
         var payload = JSON.parse(message);
         var target = findPokemon(this.battle, payload.target);
+        var record = {
+          kind: 'boost', found: !!target, stat: payload.stat, stages: payload.stages,
+          before: target ? (target.boosts ? target.boosts[payload.stat] : null) : null,
+          after: null
+        };
         if (target && !target.fainted) {
           var changes = {};
           changes[payload.stat] = payload.stages;
@@ -48,8 +70,15 @@
             this.battle.add(payload.stages > 0 ? '-boost' : '-unboost',
               target, payload.stat, String(Math.abs(delta)));
           }
+          record.after = target.boosts ? target.boosts[payload.stat] : null;
+        } else {
+          record.lastError = 'target not found / fainted';
         }
+        record.applied = true;
+        status.applied.push(record);
+        if (status.applied.length > 8) status.applied.shift();
       } catch (e) {
+        status.lastError = 'boost: ' + e;
         if (this.battle) {
           try { this.battle.add('debug', 'cobblemonext_boost failed: ' + e); } catch (e2) { }
         }
@@ -60,6 +89,10 @@
       try {
         var payload = JSON.parse(message);
         var target = findPokemon(this.battle, payload.target);
+        var record = {
+          kind: 'damage', found: !!target, amount: payload.amount | 0,
+          hpBefore: target ? target.hp : null, hpAfter: null
+        };
         if (target && !target.fainted) {
           var amount = payload.amount | 0;
           if (amount > 0) {
@@ -69,8 +102,14 @@
               target.damage(dmg, target);
             }
           }
+          record.hpAfter = target.hp;
+        } else {
+          record.lastError = 'target not found / fainted';
         }
+        status.applied.push(record);
+        if (status.applied.length > 8) status.applied.shift();
       } catch (e) {
+        status.lastError = 'damage: ' + e;
         if (this.battle) {
           try { this.battle.add('debug', 'cobblemonext_damage failed: ' + e); } catch (e2) { }
         }

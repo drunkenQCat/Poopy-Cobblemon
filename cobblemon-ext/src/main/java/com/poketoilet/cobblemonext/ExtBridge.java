@@ -30,11 +30,13 @@ public final class ExtBridge {
     public static void applyBoost(PokemonBattle battle, UUID targetUuid, String stat, int stages) {
         ShowdownPatchLoader.sendLine(battle, "cobblemonext_boost",
                 "{\"target\":\"" + targetUuid + "\",\"stat\":\"" + stat + "\",\"stages\":" + stages + "}");
+        ShowdownPatchLoader.logStatus();
     }
 
     /** 引擎原生伤害：保底留 1 HP（不直接打倒） */
     public static void applyDamage(PokemonBattle battle, UUID targetUuid, int amount) {
         ShowdownPatchLoader.sendLine(battle, "cobblemonext_damage",
                 "{\"target\":\"" + targetUuid + "\",\"amount\":" + amount + "}");
+        ShowdownPatchLoader.logStatus();
     }
 }

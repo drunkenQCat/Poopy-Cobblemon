@@ -64,4 +64,18 @@ public final class ShowdownPatchLoader {
         com.cobblemon.mod.common.battles.runner.ShowdownService.Companion.getService()
                 .send(battle.getBattleId(), new String[]{">" + type + " " + json});
     }
+
+    /** 回读引擎内的补丁自诊断状态（写进日志用于排查） */
+    public static void logStatus() {
+        try {
+            var service = com.cobblemon.mod.common.battles.runner.ShowdownService.Companion.getService();
+            if (!(service instanceof GraalShowdownService graal)) {
+                return;
+            }
+            var status = graal.getContext().getBindings("js").getMember("__cobblemonExtStatus");
+            LOGGER.info("[cobblemon-ext] 引擎侧状态: {}", status == null ? "null" : status.toString());
+        } catch (Throwable t) {
+            LOGGER.debug("[cobblemon-ext] 回读状态失败：{}", t.toString());
+        }
+    }
 }
