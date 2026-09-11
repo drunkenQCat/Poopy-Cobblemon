@@ -1,0 +1,34 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="All rights reserved"
+
+[[mods]]
+modId="cobblemon_ext"
+version="${file.jarVersion}"
+displayName="Cobblemon Ext"
+description='''Cobblemon 扩展 API 补齐库：技能使用事件、参战位就绪事件、引擎级伤害/能力值桥接。（MC 1.21.1 / NeoForge 21.1.240）'''
+authors="sky-toilet-dev"
+
+[[mixins]]
+config="cobblemon_ext.mixins.json"
+
+[[dependencies.cobblemon_ext]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.240,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.cobblemon_ext]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.22)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.cobblemon_ext]]
+modId="cobblemon"
+type="required"
+versionRange="[1.7.0,)"
+ordering="AFTER"
+side="BOTH"

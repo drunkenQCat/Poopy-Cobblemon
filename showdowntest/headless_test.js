@@ -15,7 +15,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const showdownDir = path.resolve(process.argv[2] || '.');
-const patchFile = path.resolve(process.argv[3] || '../src/main/resources/assets/poketoilet/showdown/poketoilet_patch.js');
+const patchFile = path.resolve(process.argv[3] || '../cobblemon-ext/src/main/resources/assets/cobblemon_ext/showdown/cobblemon_ext_patch.js');
 
 if (!fs.existsSync(showdownDir)) { console.error('showdown 目录不存在: ' + showdownDir); process.exit(2); }
 if (!fs.existsSync(patchFile)) { console.error('补丁文件不存在: ' + patchFile); process.exit(2); }
@@ -82,28 +82,28 @@ async function main() {
   console.log('  p1=' + p1.name + ' uuid=' + p1.uuid + ' hp=' + p1.hp);
   console.log('  p2=' + p2.name + ' uuid=' + p2.uuid + ' hp=' + p2.hp);
 
-  // ---- 番泻叶：敌方速度 -1 ----
+  // ---- 番泻叶：敌方速度 -1（cobblemonext_boost 协议行）----
   const speBefore = p2.boosts.spe;
-  stream.write('>poketoilet_senna {"target":"' + p2.uuid + '"}');
+  stream.write('>cobblemonext_boost {"target":"' + p2.uuid + '","stat":"spe","stages":-1}');
   await sleep(300);
   check('番泻叶：目标速度阶级 -1（' + speBefore + ' → ' + p2.boosts.spe + '）',
     p2.boosts.spe === speBefore - 1);
   check('番泻叶：战报含 -unboost', battleLog.includes('-unboost'));
 
-  // ---- 帝王火龙果：真实扣血 ----
+  // ---- 帝王火龙果：真实扣血（cobblemonext_damage 协议行）----
   const hpBefore = p1.hp;
-  stream.write('>poketoilet_dragonfruit {"target":"' + p1.uuid + '","amount":50}');
+  stream.write('>cobblemonext_damage {"target":"' + p1.uuid + '","amount":50}');
   await sleep(300);
   check('火龙果：扣血 50（' + hpBefore + ' → ' + p1.hp + '）', p1.hp === hpBefore - 50);
 
   // ---- 保底 1 HP ----
-  stream.write('>poketoilet_dragonfruit {"target":"' + p2.uuid + '","amount":99999}');
+  stream.write('>cobblemonext_damage {"target":"' + p2.uuid + '","amount":99999}');
   await sleep(300);
   check('火龙果：巨额伤害保底 1 HP（p2.hp=' + p2.hp + '，未倒下=' + !p2.fainted + '）',
     p2.hp === 1 && !p2.fainted);
 
   // ---- 再来一发番泻叶验证可叠加 ----
-  stream.write('>poketoilet_senna {"target":"' + p2.uuid + '"}');
+  stream.write('>cobblemonext_boost {"target":"' + p2.uuid + '","stat":"spe","stages":-1}');
   await sleep(300);
   check('番泻叶：可叠加至 -2', p2.boosts.spe === -2);
 

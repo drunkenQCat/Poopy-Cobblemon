@@ -2,69 +2,49 @@ package com.poketoilet.battle;
 
 import com.altnoir.poopsky.init.PoItems;
 import com.cobblemon.mod.common.api.battles.model.PokemonBattle;
-import com.cobblemon.mod.common.api.events.CobblemonEvents;
-import com.cobblemon.mod.common.api.events.battles.BattleStartedEvent;
-import com.cobblemon.mod.common.api.pokemon.stats.Stats;
 import com.cobblemon.mod.common.battles.ActiveBattlePokemon;
-import com.cobblemon.mod.common.battles.interpreter.instructions.MoveInstruction;
 import com.cobblemon.mod.common.battles.pokemon.BattlePokemon;
-import com.cobblemon.mod.common.entity.pokemon.PokemonEntity;
 import com.cobblemon.mod.common.pokemon.Pokemon;
 import com.mojang.logging.LogUtils;
+import com.poketoilet.cobblemonext.ExtBridge;
+import com.poketoilet.cobblemonext.ExtEvents;
 import com.poketoilet.util.SizeUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.neoforged.fml.ModList;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 
-import java.util.Iterator;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
- * 宝可梦携带 PoopSky 物品时的战斗效果桥接。
+ * 宝可梦携带 PoopSky 物品时的战斗效果（业务层）。
+ *
+ * <p>机制全部委托给 cobblemon_ext 库：本类只做“判断携带物 + 计算数值 + 调用桥接”，
+ * 对 Showdown 内部的所有访问（事件缺失、引擎注入、协议行）都在库里。
  *
  * <ul>
- *   <li><strong>番泻叶</strong>（{@code poopsky:folium_sennae}）：携带后每次使用任意技能
- *       （消耗 PP，{@code MoveInstruction} 每条技能消息触发一次），敌方所有出战宝可梦
- *       速度阶级 -1（可叠加，下限 -6）。通过 Mixin 挂在 Cobblemon 战斗解释器的
- *       {@code MoveInstruction.invoke} 上——Cobblemon 没有公开“使用技能”事件。</li>
- *   <li><strong>帝王火龙果</strong>（{@code poopsky:king_of_dragon_fruit}）：每次进入战斗
- *       对自己造成固定 1% 最大生命的伤害，对敌方每只出战宝可梦造成
- *       {@code 线性体型 × 等级} 点伤害（线性体型 = 碰撞箱体积的等效立方边长，见
- *       {@link SizeUtil}；种族差异直接体现）。触发时播放一触即发同款爆炸动画，
- *       并写入战斗界面的战报文本流。</li>
+ *   <li><strong>番泻叶</strong>（{@code poopsky:folium_sennae}）：每次使用任意技能，
+ *       敌方所有出战宝可梦速度阶级 -1（引擎原生 boost，可叠加至 -6）。</li>
+ *   <li><strong>帝王火龙果</strong>（{@code poopsky:king_of_dragon_fruit}）：每次进入战斗，
+ *       自身固定损失 1% 最大生命，敌方每只出战宝可梦受到
+ *       {@code 线性体型 × 等级} 点引擎真实伤害（保底留 1 HP），并播放一触即发同款爆炸动画。</li>
  * </ul>
- *
- * <p><strong>时序</strong>：{@code BATTLE_STARTED_POST} 触发时参战位往往尚未分配
- * （出战是战斗开始后的指令），所以只把战斗登记进待处理表，由服务端 tick 每 5 tick
- * 轮询补判：参战位就绪且有携带者 → 触发；全部就绪但无携带者 → 提前放弃；
- * 超过 40 次轮询（约 20 秒）仍未就绪 → 放弃并告警。
- *
- * <p>扣血直接写 {@code Pokemon.setCurrentHealth} 并 {@code sendUpdate} 同步 UI；
- * 一律<strong>保底留 1 HP</strong>（不直接打倒）——战斗血量的权威在 Showdown 引擎，
- * 直接打到 0 会与引擎脱同步造成状态错乱。
  */
 public final class HeldItemBattleEffects {
 
     private static final Logger LOGGER = LogUtils.getLogger();
-
-    /** 待补判的战斗：id → 战斗对象 */
-    private static final Map<UUID, PendingBattle> PENDING = new ConcurrentHashMap<>();
-
-    private static long tickCounter;
 
     private HeldItemBattleEffects() {
     }
 
     /** 在模组构造时调用一次 */
     public static void register() {
-        // 显式 Consumer 类型：subscribe 同时有 Function1 重载，方法引用会产生歧义
-        java.util.function.Consumer<BattleStartedEvent.Post> handler =
-                event -> PENDING.put(event.getBattle().getBattleId(), new PendingBattle(event.getBattle()));
-        CobblemonEvents.BATTLE_STARTED_POST.subscribe(handler);
+        if (!ModList.get().isLoaded("cobblemon_ext")) {
+            LOGGER.warn("[Poketoilet] 未安装 cobblemon_ext 库，携带物品战斗效果不可用");
+            return;
+        }
+        ExtEvents.MOVE_USED.add(HeldItemBattleEffects::onMoveUsed);
+        ExtEvents.BATTLE_ACTIVE_READY.add(HeldItemBattleEffects::onBattleActive);
         LOGGER.info("[Poketoilet] 携带物品战斗效果已注册（番泻叶 / 帝王火龙果）");
     }
 
@@ -73,57 +53,44 @@ public final class HeldItemBattleEffects {
         return !held.isEmpty() && held.is(item);
     }
 
-    /** 由 BattleTickHooks 在服务端 tick 调用：轮询补判待处理的战斗 */
-    public static void tickPending() {
-        ShowdownPatchLoader.ensurePatched();
-        if (PENDING.isEmpty()) {
-            return;
-        }
-        if (++tickCounter % 5 != 0) {
-            return;
-        }
-        Iterator<Map.Entry<UUID, PendingBattle>> iterator = PENDING.entrySet().iterator();
-        while (iterator.hasNext()) {
-            PendingBattle pending = iterator.next().getValue();
-            pending.attempts++;
-            CheckResult result = attemptDragonFruit(pending.battle);
-            if (result != CheckResult.NOT_READY) {
-                iterator.remove();
-            } else if (pending.attempts >= 40) {
-                LOGGER.warn("[Poketoilet] 战斗 {} 轮询 40 次参战位仍未就绪，放弃帝王火龙果检查",
-                        pending.battle.getBattleId());
-                iterator.remove();
+    /** 番泻叶：每次技能使用 → 敌方速度阶级 -1（引擎原生 boost） */
+    private static void onMoveUsed(ExtEvents.MoveUsedEvent event) {
+        try {
+            ExtBridge.ensurePatched();
+            if (!ExtBridge.isPatched()) {
+                return;
             }
+            Pokemon pokemon = event.user().getEffectedPokemon();
+            if (pokemon == null || !isHolding(pokemon, PoItems.FOLIUM_SENNAE.get())) {
+                return;
+            }
+            BattlePokemon target = event.target();
+            if (target == null) {
+                return;
+            }
+            ExtBridge.applyBoost(event.battle(), target.getUuid(), "spe", -1);
+            tellBattle(event.battle(), Component.translatable("message.poketoilet.senna_trigger",
+                    target.getName(), event.move().getName()));
+            LOGGER.info("[Poketoilet] {} 携带番泻叶使用技能，敌方速度下降（技能 {}）",
+                    pokemon.getDisplayName(false).getString(), event.move().getName());
+        } catch (Exception e) {
+            LOGGER.error("[Poketoilet] 番泻叶效果处理失败", e);
         }
     }
 
-    private enum CheckResult { APPLIED, NO_HOLDER, NOT_READY }
-
-    /**
-     * 帝王火龙果检查：参战位就绪且有携带者 → 触发（动画 + 扣血 + 战报）。
-     */
-    private static CheckResult attemptDragonFruit(PokemonBattle battle) {
-        boolean allAssigned = true;
-        boolean applied = false;
-        StringBuilder actives = new StringBuilder();
+    /** 帝王火龙果：进入战斗（参战位就绪）→ 自伤 1% 最大生命，敌方按 线性体型 × 等级 扣血 */
+    private static void onBattleActive(PokemonBattle battle) {
         try {
+            ExtBridge.ensurePatched();
             for (ActiveBattlePokemon active : battle.getActivePokemon()) {
                 BattlePokemon self = active.getBattlePokemon();
                 if (self == null) {
-                    allAssigned = false;
                     continue;
                 }
                 Pokemon pokemon = self.getEffectedPokemon();
-                if (actives.length() > 0) {
-                    actives.append(", ");
-                }
-                actives.append(pokemon == null ? "?" : pokemon.getDisplayName(false).getString())
-                        .append("[携带=").append(pokemon == null || pokemon.heldItem().isEmpty()
-                                ? "无" : pokemon.heldItem().getItem()).append(']');
                 if (pokemon == null || !isHolding(pokemon, PoItems.KING_OF_DRAGON_FRUIT.get())) {
                     continue;
                 }
-                // 线性体型：碰撞箱体积的等效立方边长（种族差异 + 倍率都体现在碰撞箱里）
                 float size = 1.0F;
                 if (self.getEntity() != null) {
                     size = Math.max(0.1F, SizeUtil.linearSize(self.getEntity()));
@@ -131,8 +98,8 @@ public final class HeldItemBattleEffects {
                 int selfDamage = Math.max(1, Math.round(self.getMaxHealth() * 0.01F));
                 int enemyDamage = Math.max(1, Math.round(size * pokemon.getLevel()));
 
-                // 伤害交由引擎原生结算（保底 1 HP 的钳制在补丁 JS 里）
-                sendLine(battle, "poketoilet_dragonfruit", self.getUuid(), selfDamage);
+                // 伤害交由引擎原生结算（保底 1 HP 的钳制在库补丁 JS 里）
+                ExtBridge.applyDamage(battle, self.getUuid(), selfDamage);
                 if (self.getEntity() != null) {
                     playVergeExplosion(self.getEntity());
                 }
@@ -144,67 +111,25 @@ public final class HeldItemBattleEffects {
                     if (target == null || target.getActor() == self.getActor()) {
                         continue;
                     }
-                    sendLine(battle, "poketoilet_dragonfruit", target.getUuid(), enemyDamage);
+                    ExtBridge.applyDamage(battle, target.getUuid(), enemyDamage);
                     if (target.getEntity() != null) {
                         playVergeExplosion(target.getEntity());
                     }
                     tellBattle(battle, Component.translatable("message.poketoilet.dragonfruit_trigger",
                             pokemon.getDisplayName(false), selfDamage, target.getName(), enemyDamage));
                 }
-                applied = true;
                 LOGGER.info("[Poketoilet] {} 携带帝王火龙果进入战斗：自损 {} HP，敌方各损 {} HP（体型边长 x{}，等级 {}）",
                         pokemon.getDisplayName(false).getString(), selfDamage, enemyDamage, size, pokemon.getLevel());
             }
-            if (applied) {
-                LOGGER.info("[Poketoilet] 战斗 {} 参战位：{}", battle.getBattleId(), actives);
-                return CheckResult.APPLIED;
-            }
-            return allAssigned ? CheckResult.NO_HOLDER : CheckResult.NOT_READY;
         } catch (Exception e) {
             LOGGER.error("[Poketoilet] 帝王火龙果效果处理失败", e);
-            return CheckResult.NO_HOLDER; // 出错不再重试，避免刷屏
         }
     }
 
-    /** 番泻叶：每次技能使用 → 敌方速度阶级 -1（引擎原生 boost） */
-    public static void onMoveUsed(MoveInstruction instruction, PokemonBattle battle) {
-        try {
-            ShowdownPatchLoader.ensurePatched();
-            if (!ShowdownPatchLoader.isPatched()) {
-                return; // 补丁未注入时引擎侧效果不可用
-            }
-            BattlePokemon user = instruction.getUserPokemon();
-            if (user == null) {
-                return;
-            }
-            Pokemon pokemon = user.getEffectedPokemon();
-            if (pokemon == null || !isHolding(pokemon, PoItems.FOLIUM_SENNAE.get())) {
-                return;
-            }
-            for (ActiveBattlePokemon active : battle.getActivePokemon()) {
-                BattlePokemon target = active.getBattlePokemon();
-                if (target == null || target.getActor() == user.getActor()) {
-                    continue;
-                }
-                sendLine(battle, "poketoilet_senna", target.getUuid(), 1);
-                tellBattle(battle, Component.translatable("message.poketoilet.senna_trigger",
-                        target.getName(), instruction.getMove().getName()));
-            }
-            LOGGER.info("[Poketoilet] {} 携带番泻叶使用技能，敌方速度下降（技能 {}）",
-                    pokemon.getDisplayName(false).getString(), instruction.getMove().getName());
-        } catch (Exception e) {
-            LOGGER.error("[Poketoilet] 番泻叶效果处理失败", e);
-        }
-    }
-
-    /**
-     * MonsterTrainer 模式的触发通道：通过 {@code ShowdownService.send} 写入自定义
-     * 协议行（{@code >行名 JSON}），由注入的补丁 JS 拦截后用引擎原生 API 结算。
-     */
-    private static void sendLine(PokemonBattle battle, String type, UUID targetUuid, int amount) {
-        com.cobblemon.mod.common.battles.runner.ShowdownService.Companion.getService()
-                .send(battle.getBattleId(),
-                        new String[]{">" + type + " {\"target\":\"" + targetUuid + "\",\"amount\":" + amount + "}"});
+    private static void tellBattle(PokemonBattle battle, Component message) {
+        // 写入战斗界面的战报文本流：broadcastChatMessage 会通过 BattleMessagePacket
+        // 广播给双方玩家与观战者，并记入战斗的 chatLog
+        battle.broadcastChatMessage(message.copy().withStyle(ChatFormatting.GRAY));
     }
 
     /**
@@ -222,7 +147,7 @@ public final class HeldItemBattleEffects {
 
         // 体型越大炸得越猛：半径按线性体型（普通宝可梦≈1）
         float radius = 1.0F;
-        if (at instanceof PokemonEntity pokemon) {
+        if (at instanceof com.cobblemon.mod.common.entity.pokemon.PokemonEntity pokemon) {
             radius = Math.max(1.0F, SizeUtil.linearSize(pokemon));
         }
 
@@ -239,20 +164,5 @@ public final class HeldItemBattleEffects {
         level.playSound(null, x, y, z,
                 net.minecraft.sounds.SoundEvents.GENERIC_EXPLODE.value(),
                 net.minecraft.sounds.SoundSource.NEUTRAL, 2.0F, 1.0F);
-    }
-
-    private static void tellBattle(PokemonBattle battle, Component message) {
-        // 写入战斗界面的战报文本流：broadcastChatMessage 会通过 BattleMessagePacket
-        // 广播给双方玩家与观战者，并记入战斗的 chatLog
-        battle.broadcastChatMessage(message.copy().withStyle(ChatFormatting.GRAY));
-    }
-
-    private static final class PendingBattle {
-        final PokemonBattle battle;
-        int attempts;
-
-        PendingBattle(PokemonBattle battle) {
-            this.battle = battle;
-        }
     }
 }

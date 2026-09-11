@@ -1,10 +1,11 @@
 {
   "required": true,
-  "package": "com.poketoilet.mixin",
+  "package": "com.poketoilet.cobblemonext.mixin",
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
   "mixins": [
-    "FlushToiletEntityMixin"
+    "ActiveBattlePokemonMixin",
+    "MoveInstructionMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -1,0 +1,66 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '1.0.24'
+}
+
+group = 'com.poketoilet'
+version = '1.0.0'
+
+base {
+    archivesName = 'cobblemon-ext'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+neoForge {
+    version = "21.1.240"
+    mods {
+        cobblemon_ext {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+// Cobblemon 本体与 Kotlin stdlib：仅编译期
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly fileTree('libs') { include '*.jar' }
+    compileOnly "org.jetbrains.kotlin:kotlin-stdlib:2.0.20"
+}
+
+// 构建产物同步到 poketoilet 工程的 libs 目录（其 compileOnly fileTree 自动拾取）
+def poketoiletLibsDir = rootProject.layout.projectDirectory.dir('../libs').asFile
+tasks.register('copyToPoketoiletLibs', Copy) {
+    dependsOn tasks.named('jar')
+    from(tasks.named('jar'))
+    into(poketoiletLibsDir)
+}
+tasks.named('build') {
+    finalizedBy 'copyToPoketoiletLibs'
+}
+
+// 一键安装进 Prism 实例 mods 目录
+def instanceModsDir = rootProject.layout.projectDirectory.dir('../../minecraft/mods').asFile
+tasks.register('installToInstance', Copy) {
+    dependsOn tasks.named('jar')
+    from(tasks.named('jar'))
+    into(instanceModsDir)
+    doFirst {
+        if (!instanceModsDir.exists()) {
+            throw new GradleException("找不到实例 mods 目录: ${instanceModsDir}")
+        }
+        delete fileTree(instanceModsDir) { include 'cobblemon-ext-*.jar', 'cobblemon-ext-*.jar.duplicate' }
+        println ">>> 正把 cobblemon-ext 安装到: ${instanceModsDir}"
+    }
+}

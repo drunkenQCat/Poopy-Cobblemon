@@ -67,6 +67,22 @@
 | **poopsky** | [2.2,) | 整合包内已有 `poopsky-2.2+NeoForge1.21.1-Hotfix2.jar` |
 | **cobblemon** | [1.7.0,) | 整合包内已有 `Cobblemon-neoforge-1.7.3+1.21.1.jar` |
 
+## cobblemon-ext 扩展库
+
+`dev/cobblemon-ext/` 是一个独立的库模组，把对 Cobblemon/Showdown 内部的所有
+“越界访问”收敛到一处（Fabric API 之于 Fabric 的模式）：
+
+- `MOVE_USED` 事件：Mixin 进 `MoveInstruction.invoke`（Cobblemon 无公开"使用技能"事件）；
+- `BATTLE_ACTIVE_READY` 事件：Mixin 进 `ActiveBattlePokemon.setBattlePokemon`，
+  参战位全部就绪时发射（`BATTLE_STARTED_POST` 时参战位尚未分配）；
+- `ExtBridge.applyDamage / applyBoost`：引擎级伤害与能力值桥接——
+  `ShowdownPatchLoader` 把 `cobblemon_ext_patch.js` eval 进 GraalJS 引擎上下文
+  （MonsterTrainer 模式），Java 通过 `ShowdownService.send` 发送
+  `>cobblemonext_damage / >cobblemonext_boost` 协议行，由补丁用引擎原生
+  `damage/boostBy` 结算，效果真实生效（速度箭头、战报、出手顺序）。
+
+若上游 Cobblemon 未来接受对应功能 PR，删除库中对应 Mixin 即可，扩展无需改动。
+
 ## 工作原理（源码导读）
 
 ```

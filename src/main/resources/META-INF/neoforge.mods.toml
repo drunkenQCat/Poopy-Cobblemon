@@ -39,3 +39,10 @@ type="required"
 versionRange="[1.7.0,)"
 ordering="AFTER"
 side="BOTH"
+
+[[dependencies.poketoilet]]
+modId="cobblemon_ext"
+type="optional"
+versionRange="[1.0.0,)"
+ordering="AFTER"
+side="BOTH"

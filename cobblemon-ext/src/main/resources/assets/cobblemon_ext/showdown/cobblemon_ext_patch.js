@@ -1,5 +1,5 @@
 (function () {
-  if (globalThis.__ptPatched) {
+  if (globalThis.__cobblemonExtPatched) {
     return;
   }
 
@@ -15,7 +15,7 @@
     }
   }
   if (!sim || !sim.Battle) {
-    throw new Error('poketoilet patch: cannot require sim/index — ' + requireErrors.join(' | '));
+    throw new Error('cobblemon-ext patch: cannot require sim/index — ' + requireErrors.join(' | '));
   }
 
   var BattleStream = sim.BattleStream;
@@ -36,31 +36,34 @@
 
   var _writeLine = BattleStream.prototype._writeLine;
   BattleStream.prototype._writeLine = function (type, message) {
-    if (type === 'poketoilet_senna') {
+    if (type === 'cobblemonext_boost') {
       try {
         var payload = JSON.parse(message);
         var target = findPokemon(this.battle, payload.target);
         if (target && !target.fainted) {
-          var delta = target.boostBy({ spe: -1 });
+          var changes = {};
+          changes[payload.stat] = payload.stages;
+          var delta = target.boostBy(changes);
           if (delta) {
-            this.battle.add('-unboost', target, 'spe', String(Math.abs(delta)));
+            this.battle.add(payload.stages > 0 ? '-boost' : '-unboost',
+              target, payload.stat, String(Math.abs(delta)));
           }
         }
       } catch (e) {
         if (this.battle) {
-          try { this.battle.add('debug', 'poketoilet_senna failed: ' + e); } catch (e2) { }
+          try { this.battle.add('debug', 'cobblemonext_boost failed: ' + e); } catch (e2) { }
         }
       }
       return;
     }
-    if (type === 'poketoilet_dragonfruit') {
+    if (type === 'cobblemonext_damage') {
       try {
         var payload = JSON.parse(message);
         var target = findPokemon(this.battle, payload.target);
         if (target && !target.fainted) {
           var amount = payload.amount | 0;
           if (amount > 0) {
-            // 保底留 1 HP：引擎侧真实伤害，但避免开场打倒引发回合结构混乱
+            // 保底留 1 HP：真实伤害但不直接打倒，避免开场倒下引发回合结构混乱
             var dmg = Math.min(amount, target.hp - 1);
             if (dmg > 0) {
               target.damage(dmg, target);
@@ -69,7 +72,7 @@
         }
       } catch (e) {
         if (this.battle) {
-          try { this.battle.add('debug', 'poketoilet_dragonfruit failed: ' + e); } catch (e2) { }
+          try { this.battle.add('debug', 'cobblemonext_damage failed: ' + e); } catch (e2) { }
         }
       }
       return;
@@ -77,5 +80,5 @@
     return _writeLine.call(this, type, message);
   };
 
-  globalThis.__ptPatched = true;
+  globalThis.__cobblemonExtPatched = true;
 })();
