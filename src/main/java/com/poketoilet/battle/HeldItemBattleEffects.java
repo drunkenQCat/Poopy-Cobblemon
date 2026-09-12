@@ -2,6 +2,7 @@ package com.poketoilet.battle;
 
 import com.altnoir.poopsky.init.PoItems;
 import com.cobblemon.mod.common.api.battles.model.PokemonBattle;
+import com.cobblemon.mod.common.api.events.CobblemonEvents;
 import com.cobblemon.mod.common.battles.ActiveBattlePokemon;
 import com.cobblemon.mod.common.battles.pokemon.BattlePokemon;
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity;
@@ -9,19 +10,27 @@ import com.cobblemon.mod.common.pokemon.Pokemon;
 import com.mojang.logging.LogUtils;
 import com.poketoilet.cobblemonext.ExtBridge;
 import com.poketoilet.cobblemonext.ExtEvents;
+import com.poketoilet.cobblemonext.ExtEvents.BattleTurnEvent;
 import com.poketoilet.util.SizeUtil;
+import kotlin.Unit;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 宝可梦携带 PoopSky 物品时的战斗效果（业务层）。
@@ -31,33 +40,45 @@ import java.util.Map;
  *
  * <ul>
  *   <li><strong>番泻叶</strong>（{@code poopsky:folium_sennae}）：每次使用任意技能，
- *       敌方所有出战宝可梦速度阶级 -1（引擎原生 boost，可叠加至 -6）。</li>
- *   <li><strong>帝王火龙果</strong>（{@code poopsky:king_of_dragon_fruit}）：每次进入战斗，
- *       自身固定损失 1% 最大生命，敌方每只出战宝可梦受到
- *       以目标最大生命为基准、按体积对数曲线与等级差加算的引擎真实伤害
- *       （保底留 1 HP），并播放一触即发同款爆炸动画。</li>
+ *       敌方所有出战宝可梦速度阶级 -1（引擎原生 boost，可叠加至 -6），
+ *       伴随便便抛物线动画与抽水马桶音效。</li>
+ *   <li><strong>帝王火龙果</strong>（{@code poopsky:king_of_dragon_fruit}，一次性消耗）：
+ *       触发时点按宝可梦是否为“满级火属性”分两条路径——
+ *       <ul>
+ *         <li>满级火属性：入场动画结束后立即触发；</li>
+ *         <li>其他：完整在场经历一个回合后，在引擎宣布下一回合开始时触发；
+ *             等待期间被换下、击倒或战斗结束则取消（果子不消耗），重新上场重新计算。</li>
+ *       </ul>
+ *       结算：自身固定损失 1% 最大生命，敌方每只出战宝可梦受到
+ *       {@code 线性体型 × 等级} 点引擎真实伤害（保底留 1 HP），并播放爆炸动画。</li>
  * </ul>
  */
 public final class HeldItemBattleEffects {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    private static final double DRAGON_FRUIT_BASE_DAMAGE_RATIO = 0.25D;
-    private static final double DRAGON_FRUIT_VOLUME_LOG_BASE = 500.0D;
-    private static final double DRAGON_FRUIT_LEVEL_DIVISOR = 100.0D;
+    /** Cobblemon 当前满级 */
+    private static final int MAX_LEVEL = 100;
 
-    private static final Map<ActiveBattlePokemon, PendingEntry> PENDING_ENTRIES = new IdentityHashMap<>();
+    /** 即时触发路径（满级火属性）：出战位 → 待结算 */
+    private static final Map<ActiveBattlePokemon, PendingDragonFruit> IMMEDIATE = new IdentityHashMap<>();
 
-    private static final class PendingEntry {
-        final BattlePokemon pokemon;
+    /** 回合触发路径（其他宝可梦）：战斗 id → 等待结算列表 */
+    private static final Map<UUID, List<PendingDragonFruit>> TURN_WAITING = new ConcurrentHashMap<>();
+
+    private static final class PendingDragonFruit {
+        final ActiveBattlePokemon active;
+        final BattlePokemon self;
+        final Pokemon pokemon;
+        final int triggerTurn; // 0 = 即时（出球动画结束即触发）
         int ticks;
 
-        PendingEntry(BattlePokemon pokemon) {
+        PendingDragonFruit(ActiveBattlePokemon active, BattlePokemon self, Pokemon pokemon, int triggerTurn) {
+            this.active = active;
+            this.self = self;
             this.pokemon = pokemon;
+            this.triggerTurn = triggerTurn;
         }
-    }
-
-    private HeldItemBattleEffects() {
     }
 
     /** 在模组构造时调用一次 */
@@ -68,16 +89,15 @@ public final class HeldItemBattleEffects {
         }
         ExtEvents.MOVE_USED.add(HeldItemBattleEffects::onMoveUsed);
         ExtEvents.ACTIVE_POKEMON_CHANGED.add(HeldItemBattleEffects::onActivePokemonChanged);
-        ExtEvents.BATTLE_ACTIVE_READY.add(battle -> {
-            for (ActiveBattlePokemon active : battle.getActivePokemon()) {
-                if (!PENDING_ENTRIES.containsKey(active)) {
-                    onActivePokemonChanged(active);
-                }
-            }
-        });
+        ExtEvents.BATTLE_ACTIVE_READY.add(battle -> battle.getActivePokemon()
+                .forEach(HeldItemBattleEffects::onActivePokemonChanged));
+        ExtEvents.BATTLE_TURN.add(event -> onBattleTurn(event.battle(), event.turn()));
         NeoForge.EVENT_BUS.addListener(HeldItemBattleEffects::onServerTick);
-        NeoForge.EVENT_BUS.addListener(BattleDebugCommands::register);
-        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> PENDING_ENTRIES.clear());
+        NeoForge.EVENT_BUS.addListener(com.poketoilet.battle.BattleDebugCommands::register);
+        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> {
+            IMMEDIATE.clear();
+            TURN_WAITING.clear();
+        });
         LOGGER.info("[Poketoilet] 携带物品战斗效果已注册（番泻叶 / 帝王火龙果）");
     }
 
@@ -86,23 +106,53 @@ public final class HeldItemBattleEffects {
         return !held.isEmpty() && held.is(item);
     }
 
+    /** 满级（Cobblemon 当前为 100）且当前形态含火属性 */
+    private static boolean isFireTypeMaxLevel(Pokemon pokemon) {
+        if (pokemon.getLevel() < MAX_LEVEL) {
+            return false;
+        }
+        for (var type : pokemon.getTypes()) {
+            if (type.getName().equalsIgnoreCase("fire")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 出战位内容变化：刷新两条触发路径的登记（换下/击倒即取消等待，果子不消耗） */
     private static void onActivePokemonChanged(ActiveBattlePokemon active) {
-        PENDING_ENTRIES.remove(active);
+        IMMEDIATE.remove(active);
+        TURN_WAITING.values().forEach(list -> list.removeIf(w -> w.active == active));
         BattlePokemon self = active.getBattlePokemon();
-        if (self != null && isHolding(self.getEffectedPokemon(), PoItems.KING_OF_DRAGON_FRUIT.get())) {
-            PENDING_ENTRIES.put(active, new PendingEntry(self));
+        if (self == null) {
+            return;
+        }
+        Pokemon pokemon = self.getEffectedPokemon();
+        if (pokemon == null || !isHolding(pokemon, PoItems.KING_OF_DRAGON_FRUIT.get())) {
+            return;
+        }
+        var battle = active.getBattle();
+        if (battle == null || battle.getEnded()) {
+            return;
+        }
+        PendingDragonFruit pending = new PendingDragonFruit(active, self, pokemon,
+                isFireTypeMaxLevel(pokemon) ? 0 : ExtEvents.currentTurn(battle.getBattleId()) + 2);
+        if (pending.triggerTurn == 0) {
+            IMMEDIATE.put(active, pending);
+        } else {
+            TURN_WAITING.computeIfAbsent(battle.getBattleId(), k -> new ArrayList<>()).add(pending);
         }
     }
 
-    /** 等出战位、实体和出球动画就绪；不用固定延时猜测，也不在 setter 内重入解释器。 */
+    /** 即时路径的 tick 门控：等出球光束动画结束、对手就绪、战斗就绪 */
     private static void onServerTick(ServerTickEvent.Post event) {
-        var iterator = PENDING_ENTRIES.entrySet().iterator();
+        var iterator = IMMEDIATE.entrySet().iterator();
         while (iterator.hasNext()) {
             var entry = iterator.next();
             ActiveBattlePokemon active = entry.getKey();
-            PendingEntry pending = entry.getValue();
+            PendingDragonFruit pending = entry.getValue();
             PokemonBattle battle = active.getBattle();
-            if (battle.getEnded() || active.getBattlePokemon() != pending.pokemon || !active.isAlive()) {
+            if (battle.getEnded() || active.getBattlePokemon() != pending.self || !active.isAlive()) {
                 iterator.remove();
                 continue;
             }
@@ -113,10 +163,10 @@ public final class HeldItemBattleEffects {
                 continue;
             }
             if (!ExtEvents.isBattleActiveReady(battle)) {
-                continue; // 首次入场必须等全部出战位分配，避免多人战过早结算后又被 ready 重复入队。
+                continue; // 首次入场必须等全部出战位分配，避免多人战过早结算后又被 ready 重复入队
             }
-            if (pending.pokemon.getEntity() == null || pending.pokemon.getEntity().getBeamMode() != 0) {
-                continue;
+            if (pending.self.getEntity() == null || pending.self.getEntity().getBeamMode() != 0) {
+                continue; // 出球光束动画未结束
             }
             boolean opponentsReady = false;
             for (ActiveBattlePokemon other : battle.getActivePokemon()) {
@@ -132,8 +182,80 @@ public final class HeldItemBattleEffects {
                 continue;
             }
             iterator.remove();
-            applyDragonFruit(battle, pending.pokemon);
+            triggerDragonFruit(battle, pending.self, pending.pokemon);
         }
+    }
+
+    /** 回合路径：引擎宣布的回合数到达触发回合时结算（等待期间被换下/击倒则放弃） */
+    private static void onBattleTurn(PokemonBattle battle, int turn) {
+        var list = TURN_WAITING.remove(battle.getBattleId());
+        if (list == null || battle.getEnded()) {
+            return;
+        }
+        var iterator = list.iterator();
+        while (iterator.hasNext()) {
+            PendingDragonFruit wait = iterator.next();
+            if (turn < wait.triggerTurn) {
+                continue;
+            }
+            if (wait.active.getBattlePokemon() != wait.self || !isHolding(wait.pokemon, PoItems.KING_OF_DRAGON_FRUIT.get())) {
+                iterator.remove();
+                continue;
+            }
+            ExtBridge.ensurePatched();
+            if (!ExtBridge.isPatched()) {
+                iterator.remove();
+                continue;
+            }
+            triggerDragonFruit(battle, wait.self, wait.pokemon);
+            iterator.remove();
+        }
+    }
+
+    /** 帝王火龙果结算：自损 1% 最大生命，敌方按体积比公式扣血（保底留 1 HP），随后消耗果子 */
+    private static void triggerDragonFruit(PokemonBattle battle, BattlePokemon self, Pokemon pokemon) {
+        Pokemon holder = self.getEffectedPokemon() != null ? self.getEffectedPokemon() : pokemon;
+        float size = 1.0F;
+        float atkVolume = 1.0F;
+        if (self.getEntity() != null) {
+            size = Math.max(0.1F, SizeUtil.linearSize(self.getEntity()));
+            atkVolume = Math.max(0.1F, SizeUtil.volume(self.getEntity()));
+        }
+        int selfDamage = Math.max(1, Math.round(self.getMaxHealth() * 0.01F));
+        double selfRatio = 0.01D;
+
+        ExtBridge.applyDamage(battle, self.getUuid(), selfDamage);
+        if (self.getEntity() != null) {
+            playVergeExplosion(self.getEntity());
+        }
+        int dealt = 0;
+        for (ActiveBattlePokemon other : battle.getActivePokemon()) {
+            BattlePokemon target = other.getBattlePokemon();
+            if (target == null || !other.isAlive() || other.getSide() == self.getActor().getSide()) {
+                continue;
+            }
+            float tgtVol = 1.0F;
+            if (target.getEntity() != null) {
+                tgtVol = Math.max(0.1F, SizeUtil.volume(target.getEntity()));
+            }
+            double r = atkVolume / tgtVol;
+            double f = r <= 1 ? r : 1 + Math.log(r) / Math.log(500.0D);
+            Pokemon targetPokemon = target.getEffectedPokemon();
+            int targetLevel = targetPokemon != null ? targetPokemon.getLevel() : 50;
+            int enemyDamage = Math.max(1, (int) Math.round(
+                    target.getMaxHealth() * 0.25 * Math.max(0, f + (pokemon.getLevel() - targetLevel) / 100.0D)));
+            ExtBridge.applyDamage(battle, target.getUuid(), enemyDamage);
+            if (target.getEntity() != null) {
+                playVergeExplosion(target.getEntity());
+            }
+            tellBattle(battle, Component.translatable("message.poketoilet.dragonfruit_trigger",
+                    holder.getDisplayName(false), selfDamage, target.getName(), enemyDamage));
+            dealt++;
+        }
+        // 一次性道具：结算后消耗
+        holder.removeHeldItem();
+        LOGGER.info("[Poketoilet] {} 携带帝王火龙果结算：自损 {} HP，命中 {} 个目标，果子已消耗（体型边长 x{}，等级 {}）",
+                holder.getDisplayName(false).getString(), selfDamage, dealt, size, holder.getLevel());
     }
 
     /** 番泻叶：每次技能使用 → 敌方速度阶级 -1（引擎原生 boost）+ 便意倾泻表现 */
@@ -175,7 +297,6 @@ public final class HeldItemBattleEffects {
         var level = (net.minecraft.server.level.ServerLevel) targetEntity.level();
         var poop = com.altnoir.poopsky.init.PoParticles.POOP_PARTICLE.get();
 
-        // 上厕所的声音：PoopSky 抽水马桶冲水
         level.playSound(null, targetEntity.getX(), targetEntity.getY(), targetEntity.getZ(),
                 net.minecraft.sounds.SoundEvent.createVariableRangeEvent(
                         net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
@@ -199,85 +320,7 @@ public final class HeldItemBattleEffects {
         level.sendParticles(poop, end.x, end.y + 0.5, end.z, 12, 0.25, 0.25, 0.25, 0.03);
     }
 
-    /**
-     * 帝王火龙果：每次出战位换入携带者、实体出球就绪后触发一次。
-     * 自身固定损失 1% 最大生命，敌方每只出战宝可梦受到
-     * {@code 目标最大HP × 25% × (体积系数 + 等级差 / 100)} 点引擎真实伤害；
-     * 体积系数在攻击方不大于目标时为体积比，大于目标时为
-     * {@code 1 + log500(体积比)}。同体积同等级造成 25%，500 倍体积同等级造成 50%。
-     * 伤害保底 1 点，引擎侧保底留 1 HP；果子结算后立即消耗。
-     */
-    private static void applyDragonFruit(PokemonBattle battle, BattlePokemon self) {
-        try {
-            Pokemon pokemon = self.getEffectedPokemon();
-            if (!isHolding(pokemon, PoItems.KING_OF_DRAGON_FRUIT.get())) {
-                return;
-            }
-
-            float size = 1.0F;
-            float atkVolume = 1.0F;
-            if (self.getEntity() != null) {
-                size = Math.max(0.1F, SizeUtil.linearSize(self.getEntity()));
-                atkVolume = Math.max(0.1F, SizeUtil.volume(self.getEntity()));
-            }
-            int selfDamage = Math.max(1, Math.round(self.getMaxHealth() * 0.01F));
-
-            // 伤害交由引擎原生结算（保底 1 HP 的钳制在库补丁 JS 里）
-            ExtBridge.applyDamage(battle, self.getUuid(), selfDamage);
-            if (self.getEntity() != null) {
-                playVergeExplosion(self.getEntity());
-            }
-            int dealt = 0;
-            for (ActiveBattlePokemon other : battle.getActivePokemon()) {
-                BattlePokemon target = other.getBattlePokemon();
-                if (target == null || !other.isAlive() || other.getSide() == self.getActor().getSide()) {
-                    continue;
-                }
-                float tgtVol = 1.0F;
-                if (target.getEntity() != null) {
-                    tgtVol = Math.max(0.1F, SizeUtil.volume(target.getEntity()));
-                }
-                int targetLevel = target.getEffectedPokemon().getLevel();
-                double volumeRatio = atkVolume / tgtVol;
-                double damageRatio = dragonFruitDamageRatio(
-                        volumeRatio, pokemon.getLevel() - targetLevel);
-                int enemyDamage = Math.max(1, (int) Math.round(target.getMaxHealth() * damageRatio));
-                ExtBridge.applyDamage(battle, target.getUuid(), enemyDamage);
-                if (target.getEntity() != null) {
-                    playVergeExplosion(target.getEntity());
-                }
-                tellBattle(battle, Component.translatable("message.poketoilet.dragonfruit_trigger",
-                        pokemon.getDisplayName(false), selfDamage, target.getName(), enemyDamage));
-                LOGGER.info("[Poketoilet] 帝王火龙果伤害：{} → {}，体积比 {}，等级差 {}，伤害比例 {}%，伤害 {}",
-                        pokemon.getDisplayName(false).getString(), target.getName(), volumeRatio,
-                        pokemon.getLevel() - targetLevel, damageRatio * 100.0D, enemyDamage);
-                dealt++;
-            }
-            // 一次性道具：触发后消耗（从宝可梦身上移除）
-            pokemon.removeHeldItem();
-            LOGGER.info("[Poketoilet] {} 携带帝王火龙果上场：自损 {} HP，命中 {} 个目标，果子已消耗（体型边长 x{}，等级 {}）",
-                    pokemon.getDisplayName(false).getString(), selfDamage, dealt, size, pokemon.getLevel());
-        } catch (Exception e) {
-            LOGGER.error("[Poketoilet] 帝王火龙果效果处理失败", e);
-        }
-    }
-
-    /**
-     * 计算帝王火龙果造成的目标最大生命比例。
-     * 等级差采用加算，因此不会与大体积优势相乘；负结果由 1 点最低伤害兜底。
-     */
-    private static double dragonFruitDamageRatio(double volumeRatio, int levelDifference) {
-        double safeVolumeRatio = Math.max(0.0D, volumeRatio);
-        double volumeFactor = safeVolumeRatio <= 1.0D
-                ? safeVolumeRatio
-                : 1.0D + Math.log(safeVolumeRatio) / Math.log(DRAGON_FRUIT_VOLUME_LOG_BASE);
-        double combinedFactor = volumeFactor + levelDifference / DRAGON_FRUIT_LEVEL_DIVISOR;
-        return DRAGON_FRUIT_BASE_DAMAGE_RATIO * Math.max(0.0D, combinedFactor);
-    }
-
     private static void tellBattle(PokemonBattle battle, Component message) {
-        // 写入战斗界面的战报文本流：broadcastChatMessage 会通过 BattleMessagePacket
-        // 广播给双方玩家与观战者，并记入战斗的 chatLog
         battle.broadcastChatMessage(message.copy().withStyle(ChatFormatting.GRAY));
     }
 
@@ -294,13 +337,11 @@ public final class HeldItemBattleEffects {
         double y = at.getY(-0.0625);
         double z = at.getZ();
 
-        // 体型越大炸得越猛：半径按线性体型（普通宝可梦≈1）
         float radius = 1.0F;
-        if (at instanceof com.cobblemon.mod.common.entity.pokemon.PokemonEntity pokemon) {
+        if (at instanceof PokemonEntity pokemon) {
             radius = Math.max(1.0F, SizeUtil.linearSize(pokemon));
         }
 
-        // 与 PoopSky PoopTntUtil.spawnPoopParticle 相同的粒子配方
         int count = Math.max(1, Math.round(radius * 30));
         double spread = radius * 0.5;
         double speed = 0.4 + level.random.nextDouble() * 0.4;

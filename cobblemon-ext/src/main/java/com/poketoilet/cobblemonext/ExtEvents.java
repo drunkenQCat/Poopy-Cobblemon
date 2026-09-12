@@ -8,7 +8,9 @@ import com.cobblemon.mod.common.api.moves.MoveTemplate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
@@ -30,6 +32,33 @@ public final class ExtEvents {
 
     /** 出战位内容改变（包括换下变为 null）；相同对象重复赋值不触发。 */
     public static final List<Consumer<ActiveBattlePokemon>> ACTIVE_POKEMON_CHANGED = new CopyOnWriteArrayList<>();
+
+    /** 回合事件：引擎宣布第 N 回合开始（即第 N-1 回合的招式、状态伤害与回合末效果已全部结算） */
+    public record BattleTurnEvent(PokemonBattle battle, int turn) {
+    }
+
+    public static final List<Consumer<BattleTurnEvent>> BATTLE_TURN = new CopyOnWriteArrayList<>();
+
+    /** 每场战斗已广播的最新回合数（未见 |turn| 消息前为 0） */
+    private static final Map<UUID, Integer> CURRENT_TURN = new ConcurrentHashMap<>();
+
+    /** 查询战斗当前回合数（0 = 第一回合尚未开始） */
+    public static int currentTurn(UUID battleId) {
+        return CURRENT_TURN.getOrDefault(battleId, 0);
+    }
+
+    public static void emitTurn(PokemonBattle battle, int turn) {
+        if (battle != null) {
+            CURRENT_TURN.put(battle.getBattleId(), turn);
+        }
+        for (Consumer<BattleTurnEvent> consumer : BATTLE_TURN) {
+            try {
+                consumer.accept(new BattleTurnEvent(battle, turn));
+            } catch (Throwable t) {
+                CobblemonExt.LOGGER.error("[cobblemon-ext] BATTLE_TURN 订阅者异常", t);
+            }
+        }
+    }
 
     public static void emitActivePokemonChanged(ActiveBattlePokemon active) {
         for (Consumer<ActiveBattlePokemon> consumer : ACTIVE_POKEMON_CHANGED) {
