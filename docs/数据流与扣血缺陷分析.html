@@ -93,6 +93,135 @@
 </head>
 <body>
 
+<h1>扣血未生效：2026-09-12 深入复查</h1>
+<div class="cut">
+  <p><b>原文“加一行 battle.add 就修好了”的结论不成立。</b>复查了提交
+  <code>d6df3f2</code>、实际安装的 jar、整合包自带 Showdown，以及 Cobblemon 1.7.3 的解释器字节码。
+  已安装 jar 也包含同一错误，不能归因于没有重启或没有部署。</p>
+</div>
+<h2>两个独立的根因</h2>
+<table>
+  <tr><th>位置</th><th>实际缺陷</th><th>可复现的证据</th></tr>
+  <tr><td>JS 伤害协议</td><td><code>target.getHealth()</code> 返回对象。
+    <code>Battle.add</code> 只有收到函数参数才生成 split 包。</td>
+    <td>旧补丁输出 <code>|-damage|p1a: UUID|[object Object]</code>，没有 <code>|split|p1</code>。
+    Cobblemon 的 <code>-damage</code> 注册在 <code>splitInstructionParser</code> 中。</td></tr>
+  <tr><td>Java 业务逻辑</td><td><code>HeldItemBattleEffects</code> 仍运行探针；正式火龙果伤害函数已被替换。</td>
+    <td>旧代码 A/B/C/D 探针无条件执行，E 由 <code>PROBE_MODE=true</code> 控制。
+    只改开关不能恢复正式效果。日志中只有携带者每次 -1 HP，没有敌方体型×等级伤害。</td></tr>
+</table>
+<h2>正确的协议与链路</h2>
+<div class="fixed"><pre>// 传函数，不要加括号。函数由 Battle.add 调用并拆分私有/公开 HP。
+target.damage(dmg, target);
+battle.add('-damage', target, target.getHealth);</pre>
+<pre>update
+|split|p1
+|-damage|p1a: UUID|50/110
+|-damage|p1a: UUID|46/100</pre>
+<p>上例关闭精确 HP 公开后，私有包是实际 HP，公开包是百分比。
+<code>BattleStream._write</code> 本来就会调用 <code>sendUpdates()</code>，无需另加 flush。</p></div>
+<div class="flow">
+  <div class="node java"><b>Java 上场结算</b>自损 1% / 敌方体型×等级</div>
+  <div class="arrow">→</div><div class="node js"><b>Showdown</b>修改真实 HP</div>
+  <div class="arrow">→</div><div class="node proto"><b>split + 双 HP 行</b>通过实际回调发送</div>
+  <div class="arrow">→</div><div class="node java"><b>DamageInstruction</b>解析、执行、同步</div>
+</div>
+<h2>本次修改</h2>
+<ul>
+  <li>修正 <code>getHealth</code> 参数，恢复 Cobblemon 可识别的完整伤害包。</li>
+  <li>移除五时点扣血探针，恢复自损 1% 最大生命、敌方线性体型×等级伤害和爆炸表现，仍保底 1 HP。</li>
+  <li>新增出战位变化事件。每次换入记录一次，服务器 tick 等实体与出球动画就绪、存在存活对手后结算。
+    支持已经在球外时开战、正常出球、换下再换回；相同对象重复赋值不会再次触发。</li>
+  <li>按战斗阵营排除队友，不再用“是否同一个 actor”代替敌我关系。
+    结束战斗、换下和等待超时会清理未结算记录。</li>
+</ul>
+<h2>验证与边界</h2>
+<p>旧无头测试把双方当前 HP 写成 10000，并只断言战报包含 <code>-damage</code>，因此错误包也能全部通过。
+本次把初始 HP 改为正常范围，并断言 split、UUID、精确 HP 和公开 HP。</p>
+<pre># 在 dev 目录运行
+node showdowntest/headless_test.js ../minecraft/showdown cobblemon-ext/src/main/resources/assets/cobblemon_ext/showdown/cobblemon_ext_patch.js
+node showdowntest/bridge_regression_test.js</pre>
+<p>新增 11 项回归检查通过整合包原生 <code>index.js</code> 的
+<code>startBattle → sendBattleMessage → sendFromShowdown</code> 路径，覆盖正常 HP、两侧 split、状态后缀、
+精确/公开 HP、真实下一回合出手顺序、HP 不回跳、-6 上限、1 HP 保底、无效/替补 UUID 和换下再换回。
+旧 <code>d6df3f2</code> 补丁在同一测试中因缺少 split 稳定失败，新补丁通过。</p>
+<p>两个模组均构建通过；安装目录 jar 的 SHA-256 与构建产物一致。
+这些协议测试没有模拟 Minecraft UI 或存档；实机结果另见下方复查记录。
+番泻叶仍从 Java 招式指令回调发送降速，本次只验证下一回合顺序，不能据此宣称会重排引擎已经结算完的当前回合。</p>
+<h3 id="live-verification">实机复查：已完成单打入场、换人与战后 HP 同步验证</h3>
+<p>2026-09-12 使用安装后的两个 jar，在 <code>poketoilet-debug-20260912</code> 世界副本测试。
+原世界 <code>新的世界</code> 未用于测试。通过原生 <code>BattleBuilder.pve</code> 开战，未使用克隆队伍或战后自动治疗选项。</p>
+<table>
+  <tr><th>步骤</th><th>引擎 / Java 数据</th><th>实机界面与结论</th></tr>
+  <tr><td>11:53 首次入场</td><td>46 级妙蛙种子，线性体型 0.69510597；自损 1，敌损 32。
+    自身 102→101，鲤鱼王 86→54。</td><td>自身 101/102，敌方动画完成后 63%；正式伤害确实生效。</td></tr>
+  <tr><td>正常行动与换下</td><td>使用叫声后，敌方仍为 54/86；自身受撞击后 94/102。
+    换上烈空坐时没有额外火龙果触发。</td><td>下一回合敌方仍显示 63%，HP 没有回弹；替补不会重复触发。</td></tr>
+  <tr><td>11:59 换回携带者</td><td>妙蛙种子承受普通攻击后 88→87；敌方 54→22。
+    日志仅新增一次入场结算。</td><td>自身 87/102，敌方 26%；每次重新上场触发一次。</td></tr>
+  <tr><td>12:18 第二次开战</td><td>自动采样同时读到 <code>BattlePokemon=101/102</code>、
+    <code>originalPokemon=101</code>、<code>party=101/102</code>；敌方 54/86、original=54。</td>
+    <td>界面仍为 101/102 与 63%；引擎结果已同步到原始宝可梦对象。</td></tr>
+  <tr><td>12:19 退出战斗</td><td>12:19:29 仍有 battle 与 party 采样；12:19:31 起已无参与中的战斗，
+    party 仍为 101/102。</td><td>战后真实队伍 HP 保留扣血结果，不只是战斗界面显示。</td></tr>
+</table>
+<p>测试还确认了一个容易误判的现象：整合包配置 <code>healTimer=60</code>、<code>healPercent=0.05</code>，
+战外等待后会自然回血。后续采样观察到 101→102，较晚保存的 NBT 因此为 102。
+这份晚存档不能充当“受伤 HP 跨重启保存”的证据；本次直接验证到战斗结束后的原始队伍对象，未单独验证受伤状态跨重启。
+临时自动开战/采样数据包已从测试存档移出。</p>
+<p>本地证据：<a href="../build/debug/live-verification.txt">实机采样与触发日志</a>、
+<a href="../build/debug/bridge-fixed.txt">11 项原生桥接回归结果</a>、
+<a href="../build/debug/bridge-old-failure.txt">旧补丁同测失败记录</a>。
+这些证据保存在本地 build 目录，不随源码提交。双打/多人战与番泻叶的 Minecraft 界面效果未在本轮实机覆盖。</p>
+
+<section id="debugging-lessons">
+<h2>给上一位及后续 agent 的调试经验</h2>
+<div class="panel">
+  <p><b>不要把“调用成功、日志出现、测试通过”当成玩家的问题已经解决。</b>
+  本次缺陷跨越业务触发、Showdown 状态、消息协议、Cobblemon 解释器与客户端显示，
+  任何一层的成功都只能证明那一层。以下是从这次实际失败与修复中得到的经验。</p>
+</div>
+<h3>1. 查清 API 的参数语义，同时读发送端与接收端</h3>
+<p><code>target.getHealth()</code> 与 <code>target.getHealth</code> 只差括号，含义却不同。
+前者返回对象，被旧代码拼成 <code>[object Object]</code>；后者交给 <code>Battle.add</code> 调用，
+才会生成私有与公开 HP 的 split 消息。只看到 Showdown 内部 HP 改了还不够，
+还要确认 Cobblemon 的 <code>splitInstructionParser</code> 能收到并识别最终消息。
+协议内容应实际捕获，不能凭函数名推测。</p>
+<h3>2. 回归测试必须能让旧错误失败</h3>
+<p>旧测试只检查是否出现 <code>-damage</code>，所以错误包也能通过；初始 HP 设为 10000 还掩盖了正常数值边界。
+本次改为正常 HP，检查完整 split 结构、目标 UUID、私有精确 HP、公开 HP，并验证下一回合不回弹。
+将旧补丁放进同一套新测试，确认它因缺少 split 失败，再确认新补丁通过。
+这比仅报告“新代码测试全绿”更能证明测试覆盖了原来的问题。</p>
+<h3>3. 修通信链路时，也要审查业务逻辑与调试残留</h3>
+<p>Java 端仍保留五时点探针，正式火龙果伤害函数已被替换；部分探针甚至不受开关控制。
+因此只修 JS 或只关闭 <code>PROBE_MODE</code> 都不够。
+收尾时应核对玩家要求的公式、目标与触发条件，移除临时行为，并确认最终安装的 jar 确实包含正式逻辑。</p>
+<h3>4. 按生命周期验证，别只测一次开战</h3>
+<p>已经在球外时开战、首次出球、换下再换回，是不同路径。
+单靠出球事件会漏掉已经在球外的情况，单靠一次性的战斗就绪事件又会漏掉中途换人。
+本次以出战位变化记录入场，等待必要状态就绪后执行，并清理换下、战斗结束或超时的待处理记录。
+验证重点是每次有效入场恰好触发一次；单打实测通过不能直接代表双打或多人战也已经验证。</p>
+<h3>5. 把证据分层，结论只说到验证过的地方</h3>
+<table>
+  <tr><th>证据</th><th>能说明什么</th><th>不能单独说明什么</th></tr>
+  <tr><td>引擎 HP 与输出协议</td><td>Showdown 已修改数值并发送正确消息</td><td>Java 已执行消息、客户端已显示</td></tr>
+  <tr><td>Java 原始对象与战后队伍 HP</td><td>扣血已同步到真实宝可梦对象，战后没有立即丢失</td><td>受伤状态已经跨重启保存</td></tr>
+  <tr><td>客户端血条与下一回合</td><td>玩家能看到伤害，后续行动没有把 HP 回滚</td><td>磁盘存档一定包含相同 HP</td></tr>
+  <tr><td>保存后的 NBT 与重新加载结果</td><td>在控制回血等干扰后，可验证持久化</td><td>较晚读取到满血就能证明伤害从未生效</td></tr>
+</table>
+<p>这次整合包的自然回血是实际干扰因素。必须结合时间与连续采样判断“回弹”，
+不能把战外等待后的恢复满血误认为同步失败。
+本轮验证到了战后原始队伍对象；受伤状态跨重启保存没有单独完成验证，应明确保留这个边界。</p>
+<h3>6. 完成交付链，再宣布问题解决</h3>
+<p>源码修改后还要完成构建、安装、重启和实机复现，并核对安装 jar 与构建产物的哈希。
+本次也检查了旧的实际安装 jar，确认错误确实存在于部署产物中，不能先入为主地归因于用户没有重启。
+实机测试使用世界副本，保留原存档；临时自动化与探针在结束后清理。</p>
+<p>报告应记录实际观察到的输入、数值变化、测试结果与未覆盖范围。
+流程图可以解释链路，但不能替代沿链路取得的证据。</p>
+</section>
+
+<details style="margin-top:48px"><summary class="red">历史原文（已被上方复查推翻，仅保留供追溯，不作为修复成功证明）</summary>
+
 <h1>Poketoilet 携带物战斗效果：数据流全解 与 “说了扣血却没扣血” 的根因</h1>
 <p class="dim">适用版本：cobblemon-ext 1.0.0（MonsterTrainer 模式）· MC 1.21.1 / NeoForge 21.1.240 / Cobblemon 1.7.3</p>
 
@@ -252,5 +381,6 @@ if (dmg > 0) {
 
 <p class="dim" style="margin-top:40px">文档生成于调试会话 · 探针数据来自 logs/latest.log · 修复提交 d6df3f2</p>
 
+</details>
 </body>
 </html>

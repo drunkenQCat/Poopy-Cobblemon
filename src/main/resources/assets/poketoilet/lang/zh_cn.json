@@ -19,5 +19,7 @@
   "message.poketoilet.empty_lead": "附近没有你拴着的生物（先用拴绳拴住宝可梦）",
   "message.poketoilet.flush_closed": "马桶盖还关着，先掀开马桶盖",
   "message.poketoilet.verge_toilet": "%s 一触即发——厕所被轰了！",
-  "message.poketoilet.verge_flush": "%s 一触即发——马桶被轰了！"
+  "message.poketoilet.verge_flush": "%s 一触即发——马桶被轰了！",
+  "message.poketoilet.equip_success": "%s 已携带该物品",
+  "message.poketoilet.equip_hint": "潜行 + 右键宝可梦，可将手中的它装备为携带物"
 }
