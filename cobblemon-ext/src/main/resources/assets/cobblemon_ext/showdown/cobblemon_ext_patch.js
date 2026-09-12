@@ -100,9 +100,10 @@
             var dmg = Math.min(amount, target.hp - 1);
             if (dmg > 0) {
               target.damage(dmg, target);
-              // 引擎的 damage() 不发协议消息，必须手动补 -damage，
-              // Cobblemon 的 DamageInstruction 才会同步血条与持久化数据
-              this.battle.add('-damage', target, target.getHealth());
+              // 必须传函数：Battle.add 调用它并生成 split + 私有/公开两条 HP。
+              // 传 getHealth() 对象会变成 [object Object]，且没有 split，
+              // Cobblemon 的 splitInstructionParser 根本不会创建 DamageInstruction。
+              this.battle.add('-damage', target, target.getHealth);
             }
           }
           record.hpAfter = target.hp;

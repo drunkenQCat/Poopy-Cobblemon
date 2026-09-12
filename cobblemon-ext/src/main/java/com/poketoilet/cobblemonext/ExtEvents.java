@@ -2,6 +2,7 @@ package com.poketoilet.cobblemonext;
 
 import com.cobblemon.mod.common.api.battles.model.PokemonBattle;
 import com.cobblemon.mod.common.battles.pokemon.BattlePokemon;
+import com.cobblemon.mod.common.battles.ActiveBattlePokemon;
 import com.cobblemon.mod.common.api.moves.MoveTemplate;
 
 import java.util.Collections;
@@ -27,6 +28,19 @@ public final class ExtEvents {
     /** 参战位就绪：战斗的所有出战位都分配到宝可梦后触发（每场战斗一次） */
     public static final List<Consumer<PokemonBattle>> BATTLE_ACTIVE_READY = new CopyOnWriteArrayList<>();
 
+    /** 出战位内容改变（包括换下变为 null）；相同对象重复赋值不触发。 */
+    public static final List<Consumer<ActiveBattlePokemon>> ACTIVE_POKEMON_CHANGED = new CopyOnWriteArrayList<>();
+
+    public static void emitActivePokemonChanged(ActiveBattlePokemon active) {
+        for (Consumer<ActiveBattlePokemon> consumer : ACTIVE_POKEMON_CHANGED) {
+            try {
+                consumer.accept(active);
+            } catch (Throwable t) {
+                CobblemonExt.LOGGER.error("[cobblemon-ext] ACTIVE_POKEMON_CHANGED 订阅者异常", t);
+            }
+        }
+    }
+
     /** 每场战斗只标记一次就绪事件；弱引用键，战斗结束后自动清理 */
     private static final Map<PokemonBattle, Object> READY_MARKED =
             Collections.synchronizedMap(new WeakHashMap<>());
@@ -37,6 +51,10 @@ public final class ExtEvents {
             return false;
         }
         return READY_MARKED.put(battle, Boolean.TRUE) == null;
+    }
+
+    public static boolean isBattleActiveReady(PokemonBattle battle) {
+        return READY_MARKED.containsKey(battle);
     }
 
     public static void emitMoveUsed(MoveUsedEvent event) {

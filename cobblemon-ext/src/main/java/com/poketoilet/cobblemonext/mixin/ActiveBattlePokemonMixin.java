@@ -5,6 +5,7 @@ import com.cobblemon.mod.common.battles.ActiveBattlePokemon;
 import com.cobblemon.mod.common.battles.pokemon.BattlePokemon;
 import com.poketoilet.cobblemonext.ExtEvents;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -17,12 +18,23 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(value = ActiveBattlePokemon.class, remap = false)
 public class ActiveBattlePokemonMixin {
 
+    @Unique
+    private BattlePokemon cobblemonExt$previousPokemon;
+
+    @Inject(method = "setBattlePokemon", at = @At("HEAD"), remap = false)
+    private void cobblemonExt$beforePokemonSet(BattlePokemon battlePokemon, CallbackInfo ci) {
+        cobblemonExt$previousPokemon = ((ActiveBattlePokemon) (Object) this).getBattlePokemon();
+    }
+
     @Inject(method = "setBattlePokemon", at = @At("TAIL"), remap = false)
     private void cobblemonExt$onBattlePokemonSet(BattlePokemon battlePokemon, CallbackInfo ci) {
         ActiveBattlePokemon self = (ActiveBattlePokemon) (Object) this;
         PokemonBattle battle = self.getBattle();
         if (battle == null || battle.getEnded()) {
             return;
+        }
+        if (cobblemonExt$previousPokemon != battlePokemon) {
+            ExtEvents.emitActivePokemonChanged(self);
         }
         for (ActiveBattlePokemon active : battle.getActivePokemon()) {
             if (active.getBattlePokemon() == null) {
