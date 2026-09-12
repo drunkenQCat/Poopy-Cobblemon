@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poketoilet 战斗效果数据流 与 “扣血不生效” 缺陷分析</title>
+<style>
+  :root {
+    --java: #4a9eff;       /* Java/NeoForge 侧 */
+    --js: #f0a500;         /* JS/Showdown 侧 */
+    --proto: #4ade80;      /* 协议行 */
+    --bad: #ff5d5d;
+    --good: #51d88a;
+    --bg: #12151c;
+    --panel: #1b202b;
+    --ink: #dfe6f2;
+    --dim: #8b96ab;
+    --line: #2c3444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    max-width: 1080px; margin: 0 auto; padding: 32px 20px 80px;
+    line-height: 1.75;
+  }
+  h1 { font-size: 26px; border-bottom: 2px solid var(--line); padding-bottom: 12px; }
+  h2 { font-size: 20px; margin-top: 48px; color: #fff;
+       border-left: 4px solid var(--java); padding-left: 12px; }
+  h3 { font-size: 16px; color: #c9d4e8; }
+  p  { margin: 10px 0; }
+  .dim { color: var(--dim); font-size: 13px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 18px 20px; margin: 16px 0;
+  }
+  code {
+    background: #0d1017; border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 6px; font-size: 13px; color: #9fd0ff;
+    font-family: Consolas, monospace;
+  }
+  pre {
+    background: #0d1017; border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+    font-family: Consolas, monospace; color: #b9c7de;
+  }
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; margin: 18px 0; }
+  .node {
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; min-width: 130px;
+    border: 1px solid var(--line); background: #161b26; text-align: center;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .node b { display: block; font-size: 14px; }
+  .node.java { border-color: var(--java); }
+  .node.java b { color: var(--java); }
+  .node.js { border-color: var(--js); }
+  .node.js b { color: var(--js); }
+  .node.proto { border-color: var(--proto); }
+  .node.proto b { color: var(--proto); font-family: Consolas, monospace; font-size: 12px; }
+  .node.bad { border-color: var(--bad); }
+  .node.bad b { color: var(--bad); }
+  .arrow {
+    align-self: center; padding: 0 10px; color: var(--dim);
+    font-size: 18px; white-space: nowrap; text-align: center;
+  }
+  .arrow small { display: block; font-size: 11px; }
+  .lane { display: flex; gap: 14px; margin: 14px 0; flex-wrap: wrap; }
+  .lane > div { flex: 1; min-width: 300px; }
+  .cut {
+    border: 2px dashed var(--bad); border-radius: 10px;
+    background: rgba(255, 93, 93, .06); padding: 14px 18px; margin: 14px 0;
+  }
+  .fixed {
+    border: 2px solid var(--good); border-radius: 10px;
+    background: rgba(81, 216, 138, .06); padding: 14px 18px; margin: 14px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13.5px; }
+  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; }
+  th { background: #161b26; color: #c9d4e8; }
+  .tag { display: inline-block; border-radius: 4px; padding: 0 8px; font-size: 12px; margin-right: 6px; }
+  .tag.java { background: rgba(74,158,255,.15); color: var(--java); border: 1px solid var(--java); }
+  .tag.js { background: rgba(240,165,0,.12); color: var(--js); border: 1px solid var(--js); }
+  .tag.proto { background: rgba(74,222,128,.12); color: var(--proto); border: 1px solid var(--proto); }
+  .seq { font-family: Consolas, monospace; font-size: 13px; }
+  .seq .step { margin: 6px 0; }
+  .seq .who { display: inline-block; width: 150px; font-weight: bold; }
+  .seq .who.jv { color: var(--java); }
+  .seq .who.jss { color: var(--js); }
+  .seq .who.prt { color: var(--proto); }
+  .red { color: var(--bad); }
+  .green { color: var(--good); }
+</style>
+</head>
+<body>
+
+<h1>Poketoilet 携带物战斗效果：数据流全解 与 “说了扣血却没扣血” 的根因</h1>
+<p class="dim">适用版本：cobblemon-ext 1.0.0（MonsterTrainer 模式）· MC 1.21.1 / NeoForge 21.1.240 / Cobblemon 1.7.3</p>
+
+<!-- ================================================================ -->
+<h2>〇、先记住一句话</h2>
+<div class="panel">
+  <p><b>Showdown 引擎是战斗状态的唯一权威（裁判），Cobblemon 只是舞台。</b>
+  任何“扣血 / 降速”想被玩家<b>看见</b>并<b>被战斗系统承认</b>，必须走完一条完整的链路——
+  在裁判的账本上记账，并<b>由裁判向舞台广播一条协议消息</b>。缺任何一环，数据就是孤儿。</p>
+</div>
+
+<!-- ================================================================ -->
+<h2>一、两个运行时</h2>
+<div class="lane">
+  <div class="panel">
+    <span class="tag java">Java / NeoForge 侧</span>
+    <p><b>Cobblemon = 舞台导演</b></p>
+    <p>世界实体、模型动画、战斗 UI、队伍存储。<br>
+    我们之前的 Java 镜像数据（<code>currentHealth</code>、<code>statChanges</code>）也在这里——
+    但它只是<b>镜子</b>，不是本体。</p>
+  </div>
+  <div class="panel">
+    <span class="tag js">JavaScript / GraalJS 侧</span>
+    <p><b>Showdown 引擎 = 裁判</b></p>
+    <p>速度先后、伤害骰、命中、克制、特性道具状态。<br>
+    解包在 <code>minecraft/showdown/</code>，跑在 GraalJS 上下文里，
+    线程名 "Cobblemon Showdown"。</p>
+  </div>
+</div>
+<p>两边的桥：<code>GraalShowdownService</code>。Java → JS 用
+<code>send(battleId, lines)</code>（公开 API）；JS → Java 用协议文本行，
+由 <code>ShowdownInterpreter</code> 解析成指令后跳回服务器主线程执行。</p>
+
+<!-- ================================================================ -->
+<h2>二、一回合的完整数据流（以番泻叶触发为例）</h2>
+<div class="panel seq">
+  <div class="step"><span class="who jv">Java·玩家</span> 选技能 → 打包成选择协议发给引擎</div>
+  <div class="step"><span class="who jss">JS·引擎</span> Showdown 判定速度先后 → 命中 → 伤害骰 → 产出协议文本行：
+    <code>|move|p1a: 烈空坐|ancientpower</code>、<code>-damage|...</code>、<code>-unboost|...</code></div>
+  <div class="step"><span class="who jv">Java·解释器</span> <code>ShowdownInterpreter</code> 逐行解析 → 生成
+    <code>MoveInstruction / DamageInstruction / BoostInstruction</code> 指令队列，跳回服务器主线程</div>
+  <div class="step"><span class="who jv">Java·指令执行</span> 逐条执行：播放动画、更新血条、画速度箭头、写战报文本流</div>
+  <div class="step"><span class="who prt">cobblemon-ext</span> 我们的 <code>MOVE_USED</code> Mixin 挂在
+    <code>MoveInstruction</code> 尾部——<b>此刻番泻叶才“知道”出招了</b>，然后发送
+    <code>>cobblemonext_boost</code> 协议行让引擎补一个真 boost</div>
+</div>
+<p class="dim">注意第 4 步：引擎吐出的每条协议行都会被解释器“翻译成现实”。
+<b>这条链既是显示的来源，也是数据同步的来源</b>——后面出的问题就出在这。</p>
+
+<!-- ================================================================ -->
+<h2>三、帝王火龙果的数据流（修复前 · 有断链）</h2>
+
+<h3>触发时序（修复后版本）</h3>
+<div class="flow">
+  <div class="node java"><b>出球动画</b>“去吧！”</div>
+  <div class="arrow">→<small>POKEMON_SENT_POST</small></div>
+  <div class="node java"><b>Java 计算伤害</b>体型边长 × 等级 = 46</div>
+  <div class="arrow">→<small>ExtBridge.send</small></div>
+  <div class="node proto"><b>协议行</b><code>>cobblemonext_damage<br>{target, amount:46}</code></div>
+  <div class="arrow">→<small>补丁拦截</small></div>
+  <div class="node js"><b>引擎 damage(46)</b>裁判账本上真的扣了</div>
+  <div class="arrow">→<small class="red">缺了这一步</small></div>
+  <div class="node bad"><b>-damage 消息</b>从未发出</div>
+  <div class="arrow">→</div>
+  <div class="node java"><b>舞台毫无反应</b>血条不动 / 数据不存</div>
+</div>
+
+<h3>断链的精确位置</h3>
+<div class="cut">
+  <p><b>Showdown 的设计分工</b>：在原版对战流程里，招式伤害分两步走——</p>
+  <pre>1. <span class="green">pokemon.damage(46, source)</span>   ← 引擎底层：只改 hp 数值、检查濒死
+2. <span class="green">battle.add('-damage', pokemon, hp文本)</span> ← 招式结算层：广播协议消息</pre>
+  <p>我们绕过了招式结算层（直接从 Java 发协议行触发），只做了第 1 步。
+  <b>没有第 2 步的 <code>-damage</code> 消息，Cobblemon 的解释器就收不到
+  “该同步血量了”的通知</b>——于是：</p>
+  <ul>
+    <li>战斗界面的血条纹丝不动（UI 由 <code>DamageInstruction</code> 驱动）；</li>
+    <li>Java 侧 <code>Pokemon.currentHealth</code> 不更新，战斗结束后血量不保留；</li>
+    <li>而 Java 战报里“扣了 46”是我们<b>自己打印的聊天消息</b>，不是引擎的账本。</li>
+  </ul>
+</div>
+
+<h3>探针日志的证据链（这也是当时排查的关键）</h3>
+<pre>[cobblemon-ext] 引擎侧状态: applied: [
+  {kind:"damage", found:true, hpBefore:102, hpAfter:101},   ← 探针 B：参战位就绪
+  {kind:"damage", found:true, hpBefore:101, hpAfter:100},   ← 探针 C：出球
+  {kind:"damage", found:true, hpBefore:100, hpAfter: 99},   ← 探针 D：出球+2秒
+]</pre>
+<p>三个时点<b>全部命中、全部真实扣血</b>——但玩家屏幕上什么都没发生。
+这证明“时点”从来不是问题（我们之前一直在猜时点），<b>“消息链断裂”才是</b>。
+顺带排除了另外两个嫌疑：uuid 命中（<code>found:true</code>）、协议行到达（<code>linesByType</code> 递增）。</p>
+
+<!-- ================================================================ -->
+<h2>四、修复：一行补齐消息链</h2>
+<div class="fixed">
+  <pre>// cobblemon_ext_patch.js — cobblemonext_damage 处理器
+var dmg = Math.min(amount, target.hp - 1);   // 保底留 1 HP
+if (dmg > 0) {
+  target.damage(dmg, target);                        // ① 裁判记账
+  this.battle.add('-damage', target,
+      target.getHealth());                           // ② 向舞台广播 ← 新增的一行
+}</pre>
+  <p><code>battle.add('-damage', ...)</code> 会把消息写回战报流，
+  Cobblemon 的解释器照常解析 → 血条即时更新 → <code>currentHealth</code> 持久化。
+  <b>番泻叶的 <code>-unboost</code> 一直是手动补发的</b>（所以它的提示/箭头正常）——
+  火龙果只是漏了同样的补发。</p>
+</div>
+
+<h3>修复后的完整数据流</h3>
+<div class="flow">
+  <div class="node java"><b>出球动画结束</b></div>
+  <div class="arrow">→<small>POKEMON_SENT_POST</small></div>
+  <div class="node java"><b>Java 算伤害 46</b></div>
+  <div class="arrow">→<small>send</small></div>
+  <div class="node proto"><b>>cobblemonext_damage</b></div>
+  <div class="arrow">→<small>补丁拦截</small></div>
+  <div class="node js"><b>引擎 damage(46)</b>账本扣血</div>
+  <div class="arrow">→<small>现在有这一步了</small></div>
+  <div class="node proto"><b>-damage 消息</b></div>
+  <div class="arrow">→<small>解释器</small></div>
+  <div class="node java"><b>血条更新 + currentHealth 持久化</b></div>
+</div>
+
+<!-- ================================================================ -->
+<h2>五、几个容易混淆的点</h2>
+<div class="panel">
+  <p><b>Q：为什么无头测试全是绿的，游戏里却没效果？</b><br>
+  无头测试断言的是<b>引擎对象自身</b>（<code>p1.hp === hpBefore - 50</code>）——
+  那一层确实成功了。它没有断言“消息已广播”“UI 已同步”，所以测不出断链。
+  <b>测试绿 ≠ 链路通</b>，断言必须覆盖完整链路的每一环。</p>
+
+  <p><b>Q：为什么叫“镜像数据”？</b><br>
+  Java 侧的 <code>Pokemon.currentHealth</code> / <code>BattlePokemon.statChanges</code>
+  是裁判账本的<b>舞台复制品</b>：正常流程里由解释器根据协议消息更新。
+  我们直接改复制品，裁判不知道，下一次报数就会把复制品“掰回去”（回跳现象）。</p>
+
+  <p><b>Q：那为什么保底 1 HP 还是有意义的？</b><br>
+  因为 <code>-damage</code> 消息我们补发了，解释器会同步血量——但<b>打倒（faint）</b>
+  的回合结构仍由裁判管理，开场直接把一只打倒会让后续指令流错乱，
+  所以“不直接打倒”是刻意保留的安全边界。</p>
+
+  <p><b>Q：番泻叶的速度下降现在是“真”的吗？</b><br>
+  是。<code>boostBy</code> 之后我们补发了 <code>-unboost</code> 消息，
+  解释器会画速度下降箭头；且 boost 本身记录在引擎的 boosts 里，
+  <b>出手顺序真实受影响</b>。叠加上限 -6 来自引擎规则。</p>
+</div>
+
+<!-- ================================================================ -->
+<h2>六、时序总结（修复后 · 探针保留可随时复查）</h2>
+<div class="panel seq">
+  <div class="step"><span class="who prt">A</span> 战斗开始事件 —— 参战位未分配，什么都不做（已知盲区）</div>
+  <div class="step"><span class="who prt">B</span> 参战位就绪事件 —— <b>帝王火龙果在此触发</b>：自损 1% + 敌方
+    线性体型×等级，伤害与动画全部生效</div>
+  <div class="step"><span class="who prt">C</span> 每次出招（MOVE_USED）—— 番泻叶持有者出招时敌方速度 -1</div>
+  <div class="step"><span class="who jv">—</span> 中途换上场再换回：帝王火龙果每次上场都会重新触发（POKEMON_SENT_POST）</div>
+</div>
+
+<p class="dim" style="margin-top:40px">文档生成于调试会话 · 探针数据来自 logs/latest.log · 修复提交 d6df3f2</p>
+
+</body>
+</html>
