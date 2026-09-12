@@ -37,8 +37,6 @@
      容器类）；显式加白名单是防其他数据包启用名单后这两件被排除。
    - **番泻叶**（`poopsky:folium_sennae`）：携带后每次使用任意技能（消耗 PP），
      敌方所有出战宝可梦速度阶级 -1（真实 boost，可叠加至 -6，影响出手顺序）。
-   - **帝王火龙果**（`poopsky:king_of_dragon_fruit`）：每次进入战斗对敌方每只
-     出战宝可梦造成 `线性体型 × 等级` 点**引擎真实伤害**（保底 1 HP）。
    - **帝王火龙果**（`poopsky:king_of_dragon_fruit`）：每次进入战斗，对自己造成
      固定 1% 最大生命的伤害，对敌方每只出战宝可梦造成 `线性体型 × 等级` 点伤害
      （线性体型 = ∛(碰撞箱体积)，见 `SizeUtil`）。
@@ -47,12 +45,14 @@
    - 两种扣血一律**保底留 1 HP**：战斗血量权威在 Showdown 引擎，直接打至 0 会
      脱同步；"恶系"为风味设定，实际按上述固定公式结算。
    - 实现采用 **MonsterTrainer 模式**：`ShowdownPatchLoader` 把
-     `assets/poketoilet/showdown/poketoilet_patch.js` eval 进 GraalJS 引擎上下文
+     `assets/cobblemon_ext/showdown/cobblemon_ext_patch.js` eval 进 GraalJS 引擎上下文
      （包装 `BattleStream._writeLine`），Java 侧通过 `ShowdownService.send` 发送
-     自定义协议行 `>poketoilet_senna/-dragonfruit {uuid,amount}`，由补丁用引擎
+     自定义协议行 `>cobblemonext_boost / >cobblemonext_damage`，由补丁用引擎
      原生 API（boostBy/damage）结算——速度箭头、战报、出手顺序全部真实。
-   - 无头验证：`node dev/showdowntest/headless_test.js <整合包>/minecraft/showdown
-     dev/src/main/resources/assets/poketoilet/showdown/poketoilet_patch.js`
+   - 在 `dev` 运行 `node showdowntest/bridge_regression_test.js` 验证完整 split 伤害协议、
+     HP 不回跳和下一回合速度顺序。旧测试只检查 `-damage` 关键字会漏掉错误包，详见 `docs/数据流与扣血缺陷分析.html`。
+   - 火龙果由出战位变化触发，等待初始参战位、实体和出球动画就绪后每次上场只执行一次；
+     不再运行五时点扣血探针。番泻叶仍在 Java 招式回调触发，降速影响后续引擎结算。
 5. **体型扫描仪**（`poketoilet:scale_scanner`，本模组物品）：对宝可梦右键读取其
    碰撞箱体积、等效边长（即上面两处公式所用的"线性体型"）与倍率参考值。
    合成：玻璃/铁锭/木棍竖排一列；也出现在创造物品栏"工具与实用物品"页。
@@ -107,6 +107,13 @@ src/main/java/com/poketoilet/
 > 场上宝可梦的实例类型是 `PokemonEntity`，判断宝可梦要用后者。
 
 ## 构建
+
+### 实机诊断（管理员权限 2）
+
+在测试存档使用 `/poketoiletdebug battle`，通过 Cobblemon 原生 PvE 接口与 8 格内最近的
+无主、未在战斗中的宝可梦开战；不会修改携带物、队伍或直接注入伤害。
+用 `/poketoiletdebug health` 把队伍实际 HP、战斗镜像 HP 和原始 Pokemon HP 写到聊天与日志，
+用于比较开场、下一回合、换人和战斗结束后的同步结果。不要把业务聊天中的计划伤害当作结算回执。
 
 **依赖来源**：`dev/libs/` 里是从整合包 `minecraft/mods/` 复制进来的 jar
 （`poopsky-2.2+NeoForge1.21.1-Hotfix2.jar`、`cobblemon-1.7.3.jar`、`kotlinforforge-5.12.0-all.jar`），
