@@ -21,6 +21,8 @@ java {
 tasks.named('jar', Jar) {
     preserveFileTimestamps = false
     reproducibleFileOrder = true
+    from('LICENSE', 'LICENSE-ASSETS.md')
+    from('LICENSES') { into 'LICENSES' }
     manifest {
         attributes 'Implementation-Version': project.version
     }

@@ -1,6 +1,6 @@
 modLoader="javafml"
 loaderVersion="[4,)"
-license="All rights reserved"
+license="MIT"
 
 [[mods]]
 modId="cobblemon_ext"
