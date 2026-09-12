@@ -18,7 +18,7 @@
   "message.poketoilet.verge_flush": "%s couldn't hold it — the flush toilet blew!",
   "tooltip.poketoilet.folium_sennae": "Held: After each move this Pokemon uses, the opponent's Speed falls by one stage (stacks to -6)",
   "tooltip.poketoilet.folium_sennae.2": "A surge of urgency, ready to burst",
-  "tooltip.poketoilet.king_of_dragon_fruit": "Held: On entering battle, lose 1% max HP and deal (size × level) damage to opponents",
+  "tooltip.poketoilet.king_of_dragon_fruit": "Held: On entering battle, unleash the royal power — lose 1% max HP and deal 25% of the target's max HP, scaled by your volume ratio (single use)",
   "tooltip.poketoilet.king_of_dragon_fruit.2": "The royal bowels know no obstruction",
   "message.poketoilet.equip_success": "%s is now holding it",
   "message.poketoilet.equip_hint": "Sneak + right-click a Pokemon to equip it as a held item"

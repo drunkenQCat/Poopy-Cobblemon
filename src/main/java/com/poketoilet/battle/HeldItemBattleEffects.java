@@ -208,31 +208,44 @@ public final class HeldItemBattleEffects {
             }
 
             float size = 1.0F;
+            float atkVolume = 1.0F;
             if (self.getEntity() != null) {
                 size = Math.max(0.1F, SizeUtil.linearSize(self.getEntity()));
+                atkVolume = Math.max(0.1F, SizeUtil.volume(self.getEntity()));
             }
             int selfDamage = Math.max(1, Math.round(self.getMaxHealth() * 0.01F));
-            int enemyDamage = Math.max(1, Math.round(size * pokemon.getLevel()));
 
             // 伤害交由引擎原生结算（保底 1 HP 的钳制在库补丁 JS 里）
             ExtBridge.applyDamage(battle, self.getUuid(), selfDamage);
             if (self.getEntity() != null) {
                 playVergeExplosion(self.getEntity());
             }
+            int dealt = 0;
             for (ActiveBattlePokemon other : battle.getActivePokemon()) {
                 BattlePokemon target = other.getBattlePokemon();
                 if (target == null || !other.isAlive() || other.getSide() == self.getActor().getSide()) {
                     continue;
                 }
+                // 伤害 = 目标最大HP × 25% × (攻击方体积 / 目标体积)，体型无上限；
+                // 同体积互打恰好 1/4 血
+                float tgtVol = 1.0F;
+                if (target.getEntity() != null) {
+                    tgtVol = Math.max(0.1F, SizeUtil.volume(target.getEntity()));
+                }
+                int enemyDamage = Math.max(1, (int) Math.round(
+                        target.getMaxHealth() * 0.25 * (atkVolume / tgtVol)));
                 ExtBridge.applyDamage(battle, target.getUuid(), enemyDamage);
                 if (target.getEntity() != null) {
                     playVergeExplosion(target.getEntity());
                 }
                 tellBattle(battle, Component.translatable("message.poketoilet.dragonfruit_trigger",
                         pokemon.getDisplayName(false), selfDamage, target.getName(), enemyDamage));
+                dealt++;
             }
-            LOGGER.info("[Poketoilet] {} 携带帝王火龙果上场：自损 {} HP，敌方各损 {} HP（体型边长 x{}，等级 {}）",
-                    pokemon.getDisplayName(false).getString(), selfDamage, enemyDamage, size, pokemon.getLevel());
+            // 一次性道具：触发后消耗（从宝可梦身上移除）
+            pokemon.removeHeldItem();
+            LOGGER.info("[Poketoilet] {} 携带帝王火龙果上场：自损 {} HP，命中 {} 个目标，果子已消耗（体型边长 x{}，等级 {}）",
+                    pokemon.getDisplayName(false).getString(), selfDamage, dealt, size, pokemon.getLevel());
         } catch (Exception e) {
             LOGGER.error("[Poketoilet] 帝王火龙果效果处理失败", e);
         }
