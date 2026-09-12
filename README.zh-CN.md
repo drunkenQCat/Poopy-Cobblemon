@@ -1,8 +1,8 @@
-# Poketoilet
+# Poopy Cobblemon
 
 让宝可梦使用 PoopSky 厕所，并为 PoopSky 携带物添加 Cobblemon 战斗效果。
 
-[English](README.md) · [下载](https://github.com/drunkenQCat/poketoilet/releases) · [反馈](https://github.com/drunkenQCat/poketoilet/issues) · [CI](https://github.com/drunkenQCat/poketoilet/actions/workflows/ci.yml)
+[English](README.md) · [下载](https://github.com/drunkenQCat/Poopy-Cobblemon/releases) · [反馈](https://github.com/drunkenQCat/Poopy-Cobblemon/issues) · [CI](https://github.com/drunkenQCat/Poopy-Cobblemon/actions/workflows/ci.yml)
 
 ## 安装
 
@@ -15,9 +15,11 @@
 | [PoopSky](https://github.com/Altnoir/PoopSkyMod/releases) | 2.2+NeoForge1.21.1-Hotfix2 |
 | [Kotlin for Forge](https://modrinth.com/mod/kotlin-for-forge) | 5.12.0 |
 
-从 [Releases](https://github.com/drunkenQCat/poketoilet/releases) 下载 **poketoilet-1.2.jar** 和 **cobblemon-ext-1.2.jar**。关闭游戏，替换 `mods` 中的旧版文件，在客户端和服务端安装这两个 JAR。前置模组需另行下载。
+从 [Releases](https://github.com/drunkenQCat/Poopy-Cobblemon/releases) 下载 **poopy-cobblemon-1.2.jar** 和 **cobblemon-ext-1.2.jar**。关闭游戏，替换 `mods` 中的旧版文件，在客户端和服务端安装这两个 JAR。前置模组需另行下载。
 
 扩展库负责携带物的战斗效果。其他前置版本可能可以加载，但目前测试的是上表中的组合。
+
+从旧 `poketoilet` 构建升级时，请删除旧 JAR 并替换两个模组；即使 `cobblemon-ext` 已是 1.2，也需要替换。新模组 ID 为 `poopy_cobblemon`，注册表别名会将旧扫描仪和座椅 ID 映射到新名称。
 
 ## 玩法
 
@@ -52,7 +54,7 @@ Windows 下也可运行 `./build.ps1`。`./build.ps1 -Install` 会额外将 JAR 
 
 1. 更新 [`VERSION`](VERSION)，将英文发行说明写入 `releases/<版本>.md`，中文另存为 `<版本>.zh-CN.md`。
 2. 用目标版本运行 `python scripts/build.py --tag v1.2`，提交到 `main`，等待 CI 通过。
-3. 创建并推送对应标签：`git tag -a v1.2 -m "Poketoilet 1.2"`，再执行 `git push origin v1.2`。
+3. 创建并推送对应标签：`git tag -a v1.2 -m "Poopy Cobblemon 1.2"`，再执行 `git push origin v1.2`。
 
 发布任务核对标签，上传草稿，下载复验产物后再公开。失败的草稿可以重跑；已经公开的文件不能换成不同内容，修正请使用新版本。
 

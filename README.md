@@ -1,8 +1,8 @@
-# Poketoilet
+# Poopy Cobblemon
 
 Let your Pokémon use PoopSky toilets, and bring PoopSky held items into Cobblemon battles.
 
-[简体中文](README.zh-CN.md) · [Downloads](https://github.com/drunkenQCat/poketoilet/releases) · [Issues](https://github.com/drunkenQCat/poketoilet/issues) · [CI](https://github.com/drunkenQCat/poketoilet/actions/workflows/ci.yml)
+[简体中文](README.zh-CN.md) · [Downloads](https://github.com/drunkenQCat/Poopy-Cobblemon/releases) · [Issues](https://github.com/drunkenQCat/Poopy-Cobblemon/issues) · [CI](https://github.com/drunkenQCat/Poopy-Cobblemon/actions/workflows/ci.yml)
 
 ## Install
 
@@ -15,9 +15,11 @@ For **Minecraft 1.21.1 / NeoForge / Java 21**. Install these dependencies on bot
 | [PoopSky](https://github.com/Altnoir/PoopSkyMod/releases) | 2.2+NeoForge1.21.1-Hotfix2 |
 | [Kotlin for Forge](https://modrinth.com/mod/kotlin-for-forge) | 5.12.0 |
 
-Download **poketoilet-1.2.jar** and **cobblemon-ext-1.2.jar** from [Releases](https://github.com/drunkenQCat/poketoilet/releases). Close the game, replace older copies in `mods`, and install both JARs on client and server. Dependencies are downloaded separately.
+Download **poopy-cobblemon-1.2.jar** and **cobblemon-ext-1.2.jar** from [Releases](https://github.com/drunkenQCat/Poopy-Cobblemon/releases). Close the game, replace older copies in `mods`, and install both JARs on client and server. Dependencies are downloaded separately.
 
 The extension provides the held-item battle effects. Other dependency versions may load, but the versions above are the tested combination.
+
+Upgrading from the old `poketoilet` builds: remove the old JAR and replace both mods, including `cobblemon-ext` even if it is already version 1.2. The new mod ID is `poopy_cobblemon`; registry aliases map the old scanner and seat IDs to their new names.
 
 ## Play
 
@@ -52,7 +54,7 @@ On Windows, `./build.ps1` runs the same build. `./build.ps1 -Install` also copie
 
 1. Update [`VERSION`](VERSION) and add English notes in `releases/<version>.md`; keep Chinese notes in a separate `<version>.zh-CN.md` file.
 2. Run `python scripts/build.py --tag v1.2` with the intended version, commit to `main`, and wait for CI to pass.
-3. Create and push the matching tag: `git tag -a v1.2 -m "Poketoilet 1.2"`, then `git push origin v1.2`.
+3. Create and push the matching tag: `git tag -a v1.2 -m "Poopy Cobblemon 1.2"`, then `git push origin v1.2`.
 
 The release job checks the tag, uploads a draft, verifies downloaded assets, then publishes it. Failed drafts can be retried; published files cannot be replaced with different content. Use a new version for fixes.
 

@@ -1,12 +1,14 @@
 # cobblemon-ext
 
-A NeoForge library exposing Cobblemon battle events and a Showdown bridge for damage and stat changes. Used by Poketoilet; it adds no items or gameplay on its own.
+A NeoForge library exposing Cobblemon battle events and a Showdown bridge for damage and stat changes. Used by Poopy Cobblemon; it adds no items or gameplay on its own.
 
 [简体中文](README.zh-CN.md) · [Installation](../README.md#install)
 
 Tested with Minecraft 1.21.1, NeoForge 21.1.240, Cobblemon 1.7.3 and Java 21. The library hooks into Cobblemon internals, so dependency upgrades require retesting.
 
 ## API
+
+Java package: `com.poopycobblemon.cobblemonext`. Addons compiled against the previous package must be rebuilt with this library.
 
 | Event or method | Behavior |
 | --- | --- |

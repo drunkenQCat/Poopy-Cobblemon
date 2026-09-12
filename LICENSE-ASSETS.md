@@ -4,10 +4,10 @@ Original non-code assets in this repository are © 2026 drunkenQCat and contribu
 
 This covers original textures, models, translations, icons and other artwork, including:
 
-- `src/main/resources/assets/poketoilet/textures/`
-- `src/main/resources/assets/poketoilet/models/`
-- `src/main/resources/assets/poketoilet/lang/`
+- `src/main/resources/assets/poopy_cobblemon/textures/`
+- `src/main/resources/assets/poopy_cobblemon/models/`
+- `src/main/resources/assets/poopy_cobblemon/lang/`
 
-When sharing or adapting these assets, credit the Poketoilet contributors, link to [this repository](https://github.com/drunkenQCat/poketoilet) and the license, and indicate changes. Commercial use requires separate permission from the rights holders.
+When sharing or adapting these assets, credit the Poopy Cobblemon contributors, link to [this repository](https://github.com/drunkenQCat/Poopy-Cobblemon) and the license, and indicate changes. Commercial use requires separate permission from the rights holders.
 
 Java, JavaScript and other source code use the [MIT license](LICENSE), including `cobblemon-ext/src/main/resources/assets/cobblemon_ext/showdown/cobblemon_ext_patch.js`. A directory named `assets` does not change the license of code inside it. Third-party materials retain their original licenses.

@@ -1,5 +1,5 @@
 /*
- * Poketoilet Showdown 补丁无头测试
+ * Poopy Cobblemon Showdown 补丁无头测试
  *
  * 用整合包的 Showdown 引擎（minecraft/showdown）跑一场真实对战，
  * 注入 cobblemon_ext_patch.js，验证两条自定义协议行的引擎级效果：

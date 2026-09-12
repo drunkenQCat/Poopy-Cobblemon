@@ -6,8 +6,9 @@ license="MIT"
 modId="cobblemon_ext"
 version="${file.jarVersion}"
 displayName="Cobblemon Ext"
+displayURL="https://github.com/drunkenQCat/Poopy-Cobblemon/tree/main/cobblemon-ext"
 description='''Cobblemon 扩展 API 补齐库：技能使用事件、参战位就绪事件、引擎级伤害/能力值桥接。（MC 1.21.1 / NeoForge 21.1.240）'''
-authors="sky-toilet-dev"
+authors="drunkenQCat"
 
 [[mixins]]
 config="cobblemon_ext.mixins.json"

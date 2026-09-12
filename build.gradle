@@ -4,11 +4,11 @@ plugins {
     id 'net.neoforged.moddev' version '1.0.24'
 }
 
-group = 'com.poketoilet'
+group = 'com.poopycobblemon'
 version = file('VERSION').text.trim()
 
 base {
-    archivesName = 'poketoilet'
+    archivesName = 'poopy-cobblemon'
 }
 
 java {
@@ -21,6 +21,7 @@ java {
 tasks.named('jar', Jar) {
     preserveFileTimestamps = false
     reproducibleFileOrder = true
+    includeEmptyDirs = false
     from('LICENSE', 'LICENSE-ASSETS.md')
     from('LICENSES') { into 'LICENSES' }
     manifest {
@@ -50,7 +51,7 @@ neoForge {
     }
 
     mods {
-        poketoilet {
+        poopy_cobblemon {
             sourceSet(sourceSets.main)
         }
     }
@@ -107,8 +108,11 @@ tasks.register('installToInstance', Copy) {
         if (!instanceModsDir.exists()) {
             throw new GradleException("找不到实例 mods 目录: ${instanceModsDir}")
         }
-        // 清理旧版本与 Prism 的 .jar.duplicate 残留，避免 mods 里堆积多个 poketoilet-*
-        delete fileTree(instanceModsDir) { include 'poketoilet-*.jar', 'poketoilet-*.jar.duplicate' }
+        // Remove earlier builds under either filename before installing the renamed mod.
+        delete fileTree(instanceModsDir) {
+            include 'poopy-cobblemon-*.jar', 'poopy-cobblemon-*.jar.duplicate',
+                    'poketoilet-*.jar', 'poketoilet-*.jar.duplicate'
+        }
         println ">>> 正把 mod jar 安装到: ${instanceModsDir}"
     }
 }

@@ -11,13 +11,13 @@ from prepare_dependencies import extract_safe
 
 
 def make_jar(path, mod_id, version='1.2', missing_mixin=False):
-    dependency = '\n[[dependencies.poketoilet]]\nmodId="cobblemon_ext"\nversionRange="[1.2,)"\n' if mod_id == 'poketoilet' else ''
+    dependency = '\n[[dependencies.poopy_cobblemon]]\nmodId="cobblemon_ext"\nversionRange="[1.2,)"\n' if mod_id == 'poopy_cobblemon' else ''
     with zipfile.ZipFile(path, 'w') as jar:
         jar.writestr('META-INF/MANIFEST.MF', f'Manifest-Version: 1.0\r\nImplementation-Version: {version}\r\n')
         jar.writestr('META-INF/neoforge.mods.toml', f'[[mods]]\nmodId="{mod_id}"\nversion="${{file.jarVersion}}"\n[[mixins]]\nconfig="test.json"\n{dependency}')
-        jar.writestr('test.json', json.dumps({'package': 'com.poketoilet', 'mixins': ['Example']}))
+        jar.writestr('test.json', json.dumps({'package': 'com.poopycobblemon', 'mixins': ['Example']}))
         if not missing_mixin:
-            jar.writestr('com/poketoilet/Example.class', b'test')
+            jar.writestr('com/poopycobblemon/Example.class', b'test')
         if mod_id == 'cobblemon_ext':
             jar.writestr('assets/cobblemon_ext/showdown/cobblemon_ext_patch.js', '// test')
 
@@ -31,7 +31,7 @@ class ReleaseTests(unittest.TestCase):
         (self.root / 'VERSION').write_text('1.2\n')
         (self.root / 'releases').mkdir()
         (self.root / 'releases/1.2.md').write_text('Release notes')
-        for name, mod_id, directory in [('poketoilet', 'poketoilet', 'build/libs'),
+        for name, mod_id, directory in [('poopy-cobblemon', 'poopy_cobblemon', 'build/libs'),
                                          ('cobblemon-ext', 'cobblemon_ext', 'cobblemon-ext/build/libs')]:
             folder = self.root / directory
             folder.mkdir(parents=True)
@@ -50,25 +50,34 @@ class ReleaseTests(unittest.TestCase):
             release.validate_version('v1.3')
 
     def test_wrong_jar_version_fails(self):
-        jar = self.root / 'build/libs/poketoilet-1.2.jar'
-        make_jar(jar, 'poketoilet', '1.1')
+        jar = self.root / 'build/libs/poopy-cobblemon-1.2.jar'
+        make_jar(jar, 'poopy_cobblemon', '1.1')
         with self.assertRaisesRegex(ValueError, 'manifest version'):
             release.package()
 
     def test_missing_mixin_fails(self):
-        make_jar(self.root / 'build/libs/poketoilet-1.2.jar', 'poketoilet', missing_mixin=True)
+        make_jar(self.root / 'build/libs/poopy-cobblemon-1.2.jar', 'poopy_cobblemon', missing_mixin=True)
         with self.assertRaisesRegex(ValueError, 'missing mixin'):
             release.package()
 
     def test_dependency_classes_are_not_published(self):
-        with zipfile.ZipFile(self.root / 'build/libs/poketoilet-1.2.jar', 'a') as jar:
+        with zipfile.ZipFile(self.root / 'build/libs/poopy-cobblemon-1.2.jar', 'a') as jar:
             jar.writestr('com/cobblemon/Example.class', b'dependency')
         with self.assertRaisesRegex(ValueError, 'dependency classes'):
             release.package()
 
+    def test_missing_model_texture_fails(self):
+        with zipfile.ZipFile(self.root / 'build/libs/poopy-cobblemon-1.2.jar', 'a') as jar:
+            jar.writestr('assets/poopy_cobblemon/models/item/scale_scanner.json', json.dumps({
+                'parent': 'minecraft:item/generated',
+                'textures': {'layer0': 'poopy_cobblemon:item/scale_scanner'},
+            }))
+        with self.assertRaisesRegex(ValueError, 'missing model resource'):
+            release.package()
+
     def test_tampered_asset_fails(self):
         release.package()
-        with (self.root / 'dist/poketoilet-1.2.jar').open('ab') as stream:
+        with (self.root / 'dist/poopy-cobblemon-1.2.jar').open('ab') as stream:
             stream.write(b'tampered')
         with self.assertRaisesRegex(ValueError, 'checksum mismatch'):
             release.verify_assets(self.root / 'dist', '1.2')

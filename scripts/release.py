@@ -37,11 +37,24 @@ def validate_jar(path: Path, mod_id: str, version: str) -> None:
         metadata = tomllib.loads(archive.read('META-INF/neoforge.mods.toml').decode('utf-8'))
         if metadata['mods'][0]['modId'] != mod_id or metadata['mods'][0]['version'] != '${file.jarVersion}':
             raise ValueError(f'{path}: incorrect mod metadata')
-        if mod_id == 'poketoilet':
+        if mod_id == 'poopy_cobblemon':
             dependency = next(d for d in metadata['dependencies'][mod_id] if d['modId'] == 'cobblemon_ext')
             if dependency['versionRange'] != '[1.2,)':
-                raise ValueError('Poketoilet must require cobblemon-ext API 1.2 or later when installed')
+                raise ValueError('Poopy Cobblemon must require cobblemon-ext API 1.2 or later when installed')
         names = set(archive.namelist())
+        # Follow local model references so namespace/path refactors cannot ship missing textures.
+        for model_path in sorted(n for n in names if n.startswith(f'assets/{mod_id}/models/') and n.endswith('.json')):
+            model = json.loads(archive.read(model_path))
+            references = [(model.get('parent', ''), 'models', '.json')]
+            references += [(texture, 'textures', '.png') for texture in model.get('textures', {}).values()]
+            for reference, folder, suffix in references:
+                if not reference or reference.startswith('#'):
+                    continue
+                namespace, _, resource = reference.partition(':')
+                if namespace == mod_id:
+                    target = f'assets/{namespace}/{folder}/{resource}{suffix}'
+                    if target not in names:
+                        raise ValueError(f'{path}: missing model resource {target}')
         if any(n.startswith(('com/cobblemon/', 'com/altnoir/', 'kotlin/', 'META-INF/jarjar/')) for n in names):
             raise ValueError(f'{path}: dependency classes or nested dependency JARs must not be published')
         for mixin in metadata.get('mixins', []):
@@ -56,14 +69,14 @@ def validate_jar(path: Path, mod_id: str, version: str) -> None:
 
 
 def asset_names(version: str) -> list[str]:
-    return [f'poketoilet-{version}.jar', f'cobblemon-ext-{version}.jar', 'SHA256SUMS.txt']
+    return [f'poopy-cobblemon-{version}.jar', f'cobblemon-ext-{version}.jar', 'SHA256SUMS.txt']
 
 
 def package() -> None:
     version = validate_version()
-    sources = [ROOT / 'build/libs' / f'poketoilet-{version}.jar',
+    sources = [ROOT / 'build/libs' / f'poopy-cobblemon-{version}.jar',
                ROOT / 'cobblemon-ext/build/libs' / f'cobblemon-ext-{version}.jar']
-    for path, mod_id in zip(sources, ('poketoilet', 'cobblemon_ext')):
+    for path, mod_id in zip(sources, ('poopy_cobblemon', 'cobblemon_ext')):
         validate_jar(path, mod_id, version)
     output = ROOT / 'dist'
     output.mkdir(exist_ok=True)
@@ -84,7 +97,7 @@ def verify_assets(directory: Path, version: str) -> None:
     expected = ''.join(f'{digest(directory / name)}  {name}\n' for name in asset_names(version)[:2])
     if (directory / 'SHA256SUMS.txt').read_text('utf-8') != expected:
         raise ValueError('Release checksum mismatch')
-    for name, mod_id in zip(asset_names(version)[:2], ('poketoilet', 'cobblemon_ext')):
+    for name, mod_id in zip(asset_names(version)[:2], ('poopy_cobblemon', 'cobblemon_ext')):
         validate_jar(directory / name, mod_id, version)
 
 
@@ -121,7 +134,7 @@ def publish(tag: str, repository: str, commit: str) -> None:
     if existing is None:
         flags = ['--prerelease'] if '-' in version else []
         gh('release', 'create', tag, '--repo', repository, '--verify-tag', '--target', commit,
-           '--draft', '--title', f'Poketoilet {version}', '--notes-file', str(ROOT / 'releases' / f'{version}.md'), *flags)
+           '--draft', '--title', f'Poopy Cobblemon {version}', '--notes-file', str(ROOT / 'releases' / f'{version}.md'), *flags)
     elif set(a['name'] for a in existing['assets']) - set(asset_names(version)):
         raise ValueError('Existing draft has unexpected assets; inspect it before retrying')
     gh('release', 'upload', tag, '--repo', repository, '--clobber',
@@ -132,7 +145,7 @@ def publish(tag: str, repository: str, commit: str) -> None:
         raise ValueError('Expected an unpublished draft before asset verification')
     verify_remote(tag, repository, directory, version, details)
     gh('release', 'edit', tag, '--repo', repository, '--draft=false',
-       '--prerelease=' + str('-' in version).lower(), '--title', f'Poketoilet {version}',
+       '--prerelease=' + str('-' in version).lower(), '--title', f'Poopy Cobblemon {version}',
        '--notes-file', str(ROOT / 'releases' / f'{version}.md'))
     print(f'Published {repository} {tag}.')
 
@@ -140,7 +153,7 @@ def publish(tag: str, repository: str, commit: str) -> None:
 def verify_remote(tag: str, repository: str, directory: Path, version: str, details: dict) -> None:
     if set(a['name'] for a in details['assets']) != set(asset_names(version)):
         raise ValueError('Remote release asset set does not match this build')
-    with tempfile.TemporaryDirectory(prefix='poketoilet-release-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='poopy-cobblemon-release-') as temporary:
         for asset in details['assets']:
             name = asset['name']
             download_asset(repository, asset['id'], Path(temporary) / name)

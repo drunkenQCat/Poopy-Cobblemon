@@ -3,7 +3,7 @@ plugins {
     id 'net.neoforged.moddev' version '1.0.24'
 }
 
-group = 'com.poketoilet'
+group = 'com.poopycobblemon'
 version = file('../VERSION').text.trim()
 
 base {
@@ -23,6 +23,7 @@ tasks.withType(JavaCompile).configureEach {
 tasks.named('jar', Jar) {
     preserveFileTimestamps = false
     reproducibleFileOrder = true
+    includeEmptyDirs = false
     from('../LICENSE', '../LICENSE-ASSETS.md')
     from('../LICENSES') { into 'LICENSES' }
     manifest {

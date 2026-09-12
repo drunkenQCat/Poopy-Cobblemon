@@ -29,7 +29,7 @@ def download(name: str, spec: dict) -> Path:
         try:
             print(f'Downloading {name} (attempt {attempt + 1}/3)', flush=True)
             request = urllib.request.Request(spec['url'], headers={
-                'User-Agent': 'poketoilet-build/1 (github.com/drunkenQCat/poketoilet)'})
+                'User-Agent': 'poopy-cobblemon-build/1 (github.com/drunkenQCat/Poopy-Cobblemon)'})
             with urllib.request.urlopen(request, timeout=90) as response, temporary.open('wb') as out:
                 shutil.copyfileobj(response, out)
             if digest(temporary, spec['algorithm']) != spec['hash']:

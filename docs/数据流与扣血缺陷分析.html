@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Poketoilet 战斗效果数据流 与 “扣血不生效” 缺陷分析</title>
+<title>Poopy Cobblemon 战斗效果数据流 与 “扣血不生效” 缺陷分析</title>
 <style>
   :root {
     --java: #4a9eff;       /* Java/NeoForge 侧 */
@@ -161,7 +161,7 @@ node showdowntest/bridge_regression_test.js</pre>
 这些协议测试没有模拟 Minecraft UI 或存档；实机结果另见下方复查记录。
 番泻叶仍从 Java 招式指令回调发送降速，本次只验证下一回合顺序，不能据此宣称会重排引擎已经结算完的当前回合。</p>
 <h3 id="live-verification">实机复查：已完成单打入场、换人与战后 HP 同步验证</h3>
-<p>2026-09-12 使用安装后的两个 jar，在 <code>poketoilet-debug-20260912</code> 世界副本测试。
+<p>2026-09-12 使用安装后的两个 jar，在 <code>poketoilet-debug-20260912</code>（改名前的测试存档）世界副本测试。
 原世界 <code>新的世界</code> 未用于测试。通过原生 <code>BattleBuilder.pve</code> 开战，未使用克隆队伍或战后自动治疗选项。</p>
 <table>
   <tr><th>步骤</th><th>引擎 / Java 数据</th><th>实机界面与结论</th></tr>
@@ -234,7 +234,7 @@ node showdowntest/bridge_regression_test.js</pre>
 
 <details style="margin-top:48px"><summary class="red">历史原文（已被上方复查推翻，仅保留供追溯，不作为修复成功证明）</summary>
 
-<h1>Poketoilet 携带物战斗效果：数据流全解 与 “说了扣血却没扣血” 的根因</h1>
+<h1>Poopy Cobblemon 携带物战斗效果：数据流全解 与 “说了扣血却没扣血” 的根因</h1>
 <p class="dim">适用版本：cobblemon-ext 1.0.0（MonsterTrainer 模式）· MC 1.21.1 / NeoForge 21.1.240 / Cobblemon 1.7.3</p>
 
 <!-- ================================================================ -->

@@ -11,7 +11,7 @@ const {spawnSync} = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const output = path.join(root, 'build', 'turn-regression');
 fs.mkdirSync(output, {recursive: true});
-const source = fs.readFileSync(path.join(root, 'src/main/java/com/poketoilet/battle/HeldItemBattleEffects.java'), 'utf8');
+const source = fs.readFileSync(path.join(root, 'src/main/java/com/poopycobblemon/battle/HeldItemBattleEffects.java'), 'utf8');
 function declaration(marker) {
   const start = source.indexOf(marker);
   if (start < 0) throw new Error('Missing production declaration: ' + marker);
@@ -34,7 +34,7 @@ const production = [
   'private static void onBattleTurn(',
   'private static void onServerTick(',
 ].map(declaration).join('\n');
-const events = fs.readFileSync(path.join(root, 'cobblemon-ext/src/main/java/com/poketoilet/cobblemonext/ExtEvents.java'), 'utf8')
+const events = fs.readFileSync(path.join(root, 'cobblemon-ext/src/main/java/com/poopycobblemon/cobblemonext/ExtEvents.java'), 'utf8')
   .replace(/^package .*;\r?\n/m, '').replace(/^import .*;\r?\n/gm, '')
   .replace('public final class ExtEvents', 'static final class ExtEvents');
 const java = `

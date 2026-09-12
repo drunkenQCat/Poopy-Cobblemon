@@ -1,12 +1,14 @@
 # cobblemon-ext
 
-NeoForge 扩展库，提供 Cobblemon 战斗事件，以及修改伤害和能力等级的 Showdown 桥接。供 Poketoilet 使用，本身不添加物品或玩法。
+NeoForge 扩展库，提供 Cobblemon 战斗事件，以及修改伤害和能力等级的 Showdown 桥接。供 Poopy Cobblemon 使用，本身不添加物品或玩法。
 
 [English](README.md) · [安装说明](../README.zh-CN.md#安装)
 
 已测试 Minecraft 1.21.1、NeoForge 21.1.240、Cobblemon 1.7.3 和 Java 21。扩展库使用 Cobblemon 内部接口，升级前置后需要复测。
 
 ## API
+
+Java 包名为 `com.poopycobblemon.cobblemonext`；使用旧包名的附属模组需要使用本库重新编译。
 
 | 事件或方法 | 行为 |
 | --- | --- |

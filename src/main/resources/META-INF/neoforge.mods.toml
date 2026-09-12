@@ -3,44 +3,52 @@ loaderVersion="[4,)"
 license="MIT AND CC-BY-NC-4.0"
 
 [[mods]]
-modId="poketoilet"
+modId="poopy_cobblemon"
 version="${file.jarVersion}"
-displayName="Poketoilet"
+displayName="Poopy Cobblemon"
+displayURL="https://github.com/drunkenQCat/Poopy-Cobblemon"
 description='''PoopSkyMod + Cobblemon 附属模组：用拴绳把宝可梦牵上 PoopSky 的厕所坐好，它会持续蹲坑产出 PoopSky 的大便；玩家也可以空手右键厕所坐下，或按原版机制蹲在上面。（MC 1.21.1 / NeoForge 21.1.240）'''
-authors="sky-toilet-dev"
+authors="drunkenQCat"
 
 [[mixins]]
-config="poketoilet.mixins.json"
+config="poopy_cobblemon.mixins.json"
 
-[[dependencies.poketoilet]]
+[[dependencies.poopy_cobblemon]]
+modId="poketoilet"
+type="incompatible"
+versionRange="[0,)"
+reason="Remove the old poketoilet JAR before installing Poopy Cobblemon."
+side="BOTH"
+
+[[dependencies.poopy_cobblemon]]
 modId="neoforge"
 type="required"
 versionRange="[21.1.240,)"
 ordering="NONE"
 side="BOTH"
 
-[[dependencies.poketoilet]]
+[[dependencies.poopy_cobblemon]]
 modId="minecraft"
 type="required"
 versionRange="[1.21.1,1.22)"
 ordering="NONE"
 side="BOTH"
 
-[[dependencies.poketoilet]]
+[[dependencies.poopy_cobblemon]]
 modId="poopsky"
 type="required"
 versionRange="[2.1.3,)"
 ordering="AFTER"
 side="BOTH"
 
-[[dependencies.poketoilet]]
+[[dependencies.poopy_cobblemon]]
 modId="cobblemon"
 type="required"
 versionRange="[1.7.0,)"
 ordering="AFTER"
 side="BOTH"
 
-[[dependencies.poketoilet]]
+[[dependencies.poopy_cobblemon]]
 modId="cobblemon_ext"
 type="optional"
 versionRange="[1.2,)"
