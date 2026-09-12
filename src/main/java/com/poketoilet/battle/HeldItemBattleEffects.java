@@ -34,12 +34,17 @@ import java.util.Map;
  *       敌方所有出战宝可梦速度阶级 -1（引擎原生 boost，可叠加至 -6）。</li>
  *   <li><strong>帝王火龙果</strong>（{@code poopsky:king_of_dragon_fruit}）：每次进入战斗，
  *       自身固定损失 1% 最大生命，敌方每只出战宝可梦受到
- *       {@code 线性体型 × 等级} 点引擎真实伤害（保底留 1 HP），并播放一触即发同款爆炸动画。</li>
+ *       以目标最大生命为基准、按体积对数曲线与等级差加算的引擎真实伤害
+ *       （保底留 1 HP），并播放一触即发同款爆炸动画。</li>
  * </ul>
  */
 public final class HeldItemBattleEffects {
 
     private static final Logger LOGGER = LogUtils.getLogger();
+
+    private static final double DRAGON_FRUIT_BASE_DAMAGE_RATIO = 0.25D;
+    private static final double DRAGON_FRUIT_VOLUME_LOG_BASE = 500.0D;
+    private static final double DRAGON_FRUIT_LEVEL_DIVISOR = 100.0D;
 
     private static final Map<ActiveBattlePokemon, PendingEntry> PENDING_ENTRIES = new IdentityHashMap<>();
 
@@ -197,8 +202,10 @@ public final class HeldItemBattleEffects {
     /**
      * 帝王火龙果：每次出战位换入携带者、实体出球就绪后触发一次。
      * 自身固定损失 1% 最大生命，敌方每只出战宝可梦受到
-     * {@code 线性体型 × 等级} 点引擎真实伤害（保底留 1 HP），并播放爆炸动画。
-     * 中途换上场也会触发（每次上场都算一次进入战斗）。
+     * {@code 目标最大HP × 25% × (体积系数 + 等级差 / 100)} 点引擎真实伤害；
+     * 体积系数在攻击方不大于目标时为体积比，大于目标时为
+     * {@code 1 + log500(体积比)}。同体积同等级造成 25%，500 倍体积同等级造成 50%。
+     * 伤害保底 1 点，引擎侧保底留 1 HP；果子结算后立即消耗。
      */
     private static void applyDragonFruit(PokemonBattle battle, BattlePokemon self) {
         try {
@@ -226,20 +233,24 @@ public final class HeldItemBattleEffects {
                 if (target == null || !other.isAlive() || other.getSide() == self.getActor().getSide()) {
                     continue;
                 }
-                // 伤害 = 目标最大HP × 25% × (攻击方体积 / 目标体积)，体型无上限；
-                // 同体积互打恰好 1/4 血
                 float tgtVol = 1.0F;
                 if (target.getEntity() != null) {
                     tgtVol = Math.max(0.1F, SizeUtil.volume(target.getEntity()));
                 }
-                int enemyDamage = Math.max(1, (int) Math.round(
-                        target.getMaxHealth() * 0.25 * (atkVolume / tgtVol)));
+                int targetLevel = target.getEffectedPokemon().getLevel();
+                double volumeRatio = atkVolume / tgtVol;
+                double damageRatio = dragonFruitDamageRatio(
+                        volumeRatio, pokemon.getLevel() - targetLevel);
+                int enemyDamage = Math.max(1, (int) Math.round(target.getMaxHealth() * damageRatio));
                 ExtBridge.applyDamage(battle, target.getUuid(), enemyDamage);
                 if (target.getEntity() != null) {
                     playVergeExplosion(target.getEntity());
                 }
                 tellBattle(battle, Component.translatable("message.poketoilet.dragonfruit_trigger",
                         pokemon.getDisplayName(false), selfDamage, target.getName(), enemyDamage));
+                LOGGER.info("[Poketoilet] 帝王火龙果伤害：{} → {}，体积比 {}，等级差 {}，伤害比例 {}%，伤害 {}",
+                        pokemon.getDisplayName(false).getString(), target.getName(), volumeRatio,
+                        pokemon.getLevel() - targetLevel, damageRatio * 100.0D, enemyDamage);
                 dealt++;
             }
             // 一次性道具：触发后消耗（从宝可梦身上移除）
@@ -249,6 +260,19 @@ public final class HeldItemBattleEffects {
         } catch (Exception e) {
             LOGGER.error("[Poketoilet] 帝王火龙果效果处理失败", e);
         }
+    }
+
+    /**
+     * 计算帝王火龙果造成的目标最大生命比例。
+     * 等级差采用加算，因此不会与大体积优势相乘；负结果由 1 点最低伤害兜底。
+     */
+    private static double dragonFruitDamageRatio(double volumeRatio, int levelDifference) {
+        double safeVolumeRatio = Math.max(0.0D, volumeRatio);
+        double volumeFactor = safeVolumeRatio <= 1.0D
+                ? safeVolumeRatio
+                : 1.0D + Math.log(safeVolumeRatio) / Math.log(DRAGON_FRUIT_VOLUME_LOG_BASE);
+        double combinedFactor = volumeFactor + levelDifference / DRAGON_FRUIT_LEVEL_DIVISOR;
+        return DRAGON_FRUIT_BASE_DAMAGE_RATIO * Math.max(0.0D, combinedFactor);
     }
 
     private static void tellBattle(PokemonBattle battle, Component message) {

@@ -121,12 +121,12 @@ battle.add('-damage', target, target.getHealth);</pre>
 <p>上例关闭精确 HP 公开后，私有包是实际 HP，公开包是百分比。
 <code>BattleStream._write</code> 本来就会调用 <code>sendUpdates()</code>，无需另加 flush。</p></div>
 <div class="flow">
-  <div class="node java"><b>Java 上场结算</b>自损 1% / 敌方体型×等级</div>
+  <div class="node java"><b>Java 上场结算</b>自损 1% / 敌方按体积对数曲线与等级差扣血</div>
   <div class="arrow">→</div><div class="node js"><b>Showdown</b>修改真实 HP</div>
   <div class="arrow">→</div><div class="node proto"><b>split + 双 HP 行</b>通过实际回调发送</div>
   <div class="arrow">→</div><div class="node java"><b>DamageInstruction</b>解析、执行、同步</div>
 </div>
-<h2>本次修改</h2>
+<h2>此前的协议修复</h2>
 <ul>
   <li>修正 <code>getHealth</code> 参数，恢复 Cobblemon 可识别的完整伤害包。</li>
   <li>移除五时点扣血探针，恢复自损 1% 最大生命、敌方线性体型×等级伤害和爆炸表现，仍保底 1 HP。</li>
@@ -135,6 +135,18 @@ battle.add('-damage', target, target.getHealth);</pre>
   <li>按战斗阵营排除队友，不再用“是否同一个 actor”代替敌我关系。
     结束战斗、换下和等待超时会清理未结算记录。</li>
 </ul>
+<h2>当前伤害公式（平衡修订）</h2>
+<div class="fixed">
+  <p>令 <code>r = 攻击方体积 / 目标体积</code>，<code>ΔL = 攻击方等级 - 目标等级</code>：</p>
+  <pre>体积系数 f(r) = r                         （r ≤ 1）
+              = 1 + ln(r) / ln(500)      （r &gt; 1）
+
+伤害比例 = 25% × max(0, f(r) + ΔL / 100)
+伤害     = max(1, round(目标最大HP × 伤害比例))</pre>
+  <p>同体积同等级严格扣 25%；500 倍体积同等级扣 50%。等级差按加算处理，
+  每高一级增加 0.25 个百分点，每低一级减少 0.25 个百分点，避免等级优势与体积优势相乘失控。
+  引擎侧继续钳制为至少保留 1 HP；果子完成一次结算后从宝可梦身上移除。</p>
+</div>
 <h2>验证与边界</h2>
 <p>旧无头测试把双方当前 HP 写成 10000，并只断言战报包含 <code>-damage</code>，因此错误包也能全部通过。
 本次把初始 HP 改为正常范围，并断言 split、UUID、精确 HP 和公开 HP。</p>
@@ -374,12 +386,12 @@ if (dmg > 0) {
 <div class="panel seq">
   <div class="step"><span class="who prt">A</span> 战斗开始事件 —— 参战位未分配，什么都不做（已知盲区）</div>
   <div class="step"><span class="who prt">B</span> 参战位就绪事件 —— <b>帝王火龙果在此触发</b>：自损 1% + 敌方
-    线性体型×等级，伤害与动画全部生效</div>
+    最大 HP × 25% ×（体积系数 + 等级差/100），伤害与动画全部生效，随后消耗果子</div>
   <div class="step"><span class="who prt">C</span> 每次出招（MOVE_USED）—— 番泻叶持有者出招时敌方速度 -1</div>
-  <div class="step"><span class="who jv">—</span> 中途换上场再换回：帝王火龙果每次上场都会重新触发（POKEMON_SENT_POST）</div>
+  <div class="step"><span class="who jv">—</span> 中途换上场再换回：果子首次触发后已经消耗，不会重复触发</div>
 </div>
 
-<p class="dim" style="margin-top:40px">文档生成于调试会话 · 探针数据来自 logs/latest.log · 修复提交 d6df3f2</p>
+<p class="dim" style="margin-top:40px">文档生成于调试会话 · 探针数据来自 logs/latest.log · 伤害公式于 2026-09-12 更新</p>
 
 </details>
 </body>
