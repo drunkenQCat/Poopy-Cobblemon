@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'com.poketoilet'
-version = '1.0.0'
+version = '1.2'
 
 base {
     archivesName = 'cobblemon-ext'
@@ -18,6 +18,12 @@ java {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+tasks.named('jar', Jar) {
+    manifest {
+        attributes 'Implementation-Version': project.version
+    }
 }
 
 neoForge {

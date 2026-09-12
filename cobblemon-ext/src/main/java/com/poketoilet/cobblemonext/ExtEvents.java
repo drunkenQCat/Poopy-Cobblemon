@@ -39,7 +39,10 @@ public final class ExtEvents {
 
     public static final List<Consumer<BattleTurnEvent>> BATTLE_TURN = new CopyOnWriteArrayList<>();
 
-    /** 每场战斗已广播的最新回合数（未见 |turn| 消息前为 0） */
+    /** 战斗结束后清理业务层的等待状态。 */
+    public static final List<Consumer<PokemonBattle>> BATTLE_ENDED = new CopyOnWriteArrayList<>();
+
+    /** 每场战斗已执行的最新回合数（第一回合尚未执行时为 0） */
     private static final Map<UUID, Integer> CURRENT_TURN = new ConcurrentHashMap<>();
 
     /** 查询战斗当前回合数（0 = 第一回合尚未开始） */
@@ -48,14 +51,27 @@ public final class ExtEvents {
     }
 
     public static void emitTurn(PokemonBattle battle, int turn) {
-        if (battle != null) {
-            CURRENT_TURN.put(battle.getBattleId(), turn);
+        if (battle == null || battle.getEnded() || turn <= currentTurn(battle.getBattleId())) {
+            return;
         }
+        CURRENT_TURN.put(battle.getBattleId(), turn);
         for (Consumer<BattleTurnEvent> consumer : BATTLE_TURN) {
             try {
                 consumer.accept(new BattleTurnEvent(battle, turn));
             } catch (Throwable t) {
                 CobblemonExt.LOGGER.error("[cobblemon-ext] BATTLE_TURN 订阅者异常", t);
+            }
+        }
+    }
+
+    public static void emitBattleEnded(PokemonBattle battle) {
+        CURRENT_TURN.remove(battle.getBattleId());
+        READY_MARKED.remove(battle);
+        for (Consumer<PokemonBattle> consumer : BATTLE_ENDED) {
+            try {
+                consumer.accept(battle);
+            } catch (Throwable t) {
+                CobblemonExt.LOGGER.error("[cobblemon-ext] BATTLE_ENDED 订阅者异常", t);
             }
         }
     }

@@ -128,7 +128,7 @@ Cobblemon 本体是 Kotlin 写的，编译期需要 Kotlin runtime（kotlinforfo
 set JAVA_HOME=C:\Users\user\.jdks\ms-21.0.9
 set GRADLE_OPTS=-Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7890 -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7890
 cd /d "C:\Users\user\AppData\Roaming\PrismLauncher\instances\天空宝可梦厕所 v1.0\dev"
-gradlew.bat build          # 编译 + 打包 build/libs/poketoilet-1.0.0.jar
+gradlew.bat build          # 编译 + 打包 build/libs/poketoilet-1.2.jar
 gradlew.bat installToInstance   # 覆盖安装进 minecraft\mods（自动清旧版）
 ```
 

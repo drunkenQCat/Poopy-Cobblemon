@@ -6,7 +6,7 @@
   "mixins": [
     "ActiveBattlePokemonMixin",
     "MoveInstructionMixin",
-    "TurnInstructionMixin"
+    "PokemonBattleLifecycleMixin"
   ],
   "injectors": {
     "defaultRequire": 1

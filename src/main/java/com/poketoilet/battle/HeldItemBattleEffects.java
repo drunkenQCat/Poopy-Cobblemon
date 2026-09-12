@@ -1,8 +1,8 @@
 package com.poketoilet.battle;
 
 import com.altnoir.poopsky.init.PoItems;
+import com.cobblemon.mod.common.Cobblemon;
 import com.cobblemon.mod.common.api.battles.model.PokemonBattle;
-import com.cobblemon.mod.common.api.events.CobblemonEvents;
 import com.cobblemon.mod.common.battles.ActiveBattlePokemon;
 import com.cobblemon.mod.common.battles.pokemon.BattlePokemon;
 import com.cobblemon.mod.common.entity.pokemon.PokemonEntity;
@@ -10,12 +10,9 @@ import com.cobblemon.mod.common.pokemon.Pokemon;
 import com.mojang.logging.LogUtils;
 import com.poketoilet.cobblemonext.ExtBridge;
 import com.poketoilet.cobblemonext.ExtEvents;
-import com.poketoilet.cobblemonext.ExtEvents.BattleTurnEvent;
 import com.poketoilet.util.SizeUtil;
-import kotlin.Unit;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
@@ -26,7 +23,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -50,15 +46,12 @@ import java.util.concurrent.ConcurrentHashMap;
  *             等待期间被换下、击倒或战斗结束则取消（果子不消耗），重新上场重新计算。</li>
  *       </ul>
  *       结算：自身固定损失 1% 最大生命，敌方每只出战宝可梦受到
- *       {@code 线性体型 × 等级} 点引擎真实伤害（保底留 1 HP），并播放爆炸动画。</li>
+ *       基于对数体积比与等级差的引擎真实伤害（保底留 1 HP），并播放爆炸动画。</li>
  * </ul>
  */
 public final class HeldItemBattleEffects {
 
     private static final Logger LOGGER = LogUtils.getLogger();
-
-    /** Cobblemon 当前满级 */
-    private static final int MAX_LEVEL = 100;
 
     /** 即时触发路径（满级火属性）：出战位 → 待结算 */
     private static final Map<ActiveBattlePokemon, PendingDragonFruit> IMMEDIATE = new IdentityHashMap<>();
@@ -92,6 +85,7 @@ public final class HeldItemBattleEffects {
         ExtEvents.BATTLE_ACTIVE_READY.add(battle -> battle.getActivePokemon()
                 .forEach(HeldItemBattleEffects::onActivePokemonChanged));
         ExtEvents.BATTLE_TURN.add(event -> onBattleTurn(event.battle(), event.turn()));
+        ExtEvents.BATTLE_ENDED.add(HeldItemBattleEffects::onBattleEnded);
         NeoForge.EVENT_BUS.addListener(HeldItemBattleEffects::onServerTick);
         NeoForge.EVENT_BUS.addListener(com.poketoilet.battle.BattleDebugCommands::register);
         NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> {
@@ -102,13 +96,16 @@ public final class HeldItemBattleEffects {
     }
 
     private static boolean isHolding(Pokemon pokemon, Item item) {
+        if (pokemon == null) {
+            return false;
+        }
         ItemStack held = pokemon.heldItem();
         return !held.isEmpty() && held.is(item);
     }
 
-    /** 满级（Cobblemon 当前为 100）且当前形态含火属性 */
+    /** 达到配置中的满级，且当前形态含火属性（不包括太晶化）。 */
     private static boolean isFireTypeMaxLevel(Pokemon pokemon) {
-        if (pokemon.getLevel() < MAX_LEVEL) {
+        if (pokemon.getLevel() < Cobblemon.INSTANCE.getConfig().getMaxPokemonLevel()) {
             return false;
         }
         for (var type : pokemon.getTypes()) {
@@ -122,9 +119,12 @@ public final class HeldItemBattleEffects {
     /** 出战位内容变化：刷新两条触发路径的登记（换下/击倒即取消等待，果子不消耗） */
     private static void onActivePokemonChanged(ActiveBattlePokemon active) {
         IMMEDIATE.remove(active);
-        TURN_WAITING.values().forEach(list -> list.removeIf(w -> w.active == active));
+        TURN_WAITING.entrySet().removeIf(entry -> {
+            entry.getValue().removeIf(w -> w.active == active);
+            return entry.getValue().isEmpty();
+        });
         BattlePokemon self = active.getBattlePokemon();
-        if (self == null) {
+        if (self == null || !active.isAlive()) {
             return;
         }
         Pokemon pokemon = self.getEffectedPokemon();
@@ -141,7 +141,14 @@ public final class HeldItemBattleEffects {
             IMMEDIATE.put(active, pending);
         } else {
             TURN_WAITING.computeIfAbsent(battle.getBattleId(), k -> new ArrayList<>()).add(pending);
+            LOGGER.debug("[Poketoilet] 火龙果等待：battle={} pokemon={} triggerTurn={}",
+                    battle.getBattleId(), pokemon.getUuid(), pending.triggerTurn);
         }
+    }
+
+    private static void onBattleEnded(PokemonBattle battle) {
+        TURN_WAITING.remove(battle.getBattleId());
+        IMMEDIATE.keySet().removeIf(active -> active.getBattle() == battle);
     }
 
     /** 即时路径的 tick 门控：等出球光束动画结束、对手就绪、战斗就绪 */
@@ -152,7 +159,8 @@ public final class HeldItemBattleEffects {
             ActiveBattlePokemon active = entry.getKey();
             PendingDragonFruit pending = entry.getValue();
             PokemonBattle battle = active.getBattle();
-            if (battle.getEnded() || active.getBattlePokemon() != pending.self || !active.isAlive()) {
+            if (battle.getEnded() || active.getBattlePokemon() != pending.self || !active.isAlive()
+                    || !isHolding(pending.pokemon, PoItems.KING_OF_DRAGON_FRUIT.get())) {
                 iterator.remove();
                 continue;
             }
@@ -188,27 +196,34 @@ public final class HeldItemBattleEffects {
 
     /** 回合路径：引擎宣布的回合数到达触发回合时结算（等待期间被换下/击倒则放弃） */
     private static void onBattleTurn(PokemonBattle battle, int turn) {
-        var list = TURN_WAITING.remove(battle.getBattleId());
-        if (list == null || battle.getEnded()) {
+        if (battle.getEnded()) {
+            onBattleEnded(battle);
+            return;
+        }
+        var list = TURN_WAITING.get(battle.getBattleId());
+        if (list == null) {
             return;
         }
         var iterator = list.iterator();
         while (iterator.hasNext()) {
             PendingDragonFruit wait = iterator.next();
-            if (turn < wait.triggerTurn) {
-                continue;
-            }
-            if (wait.active.getBattlePokemon() != wait.self || !isHolding(wait.pokemon, PoItems.KING_OF_DRAGON_FRUIT.get())) {
+            if (wait.active.getBattlePokemon() != wait.self || !wait.active.isAlive()
+                    || !isHolding(wait.pokemon, PoItems.KING_OF_DRAGON_FRUIT.get())) {
                 iterator.remove();
                 continue;
+            }
+            if (turn < wait.triggerTurn) {
+                continue; // 保留登记，下一个回合事件还要继续检查
             }
             ExtBridge.ensurePatched();
             if (!ExtBridge.isPatched()) {
-                iterator.remove();
                 continue;
             }
-            triggerDragonFruit(battle, wait.self, wait.pokemon);
             iterator.remove();
+            triggerDragonFruit(battle, wait.self, wait.pokemon);
+        }
+        if (list.isEmpty()) {
+            TURN_WAITING.remove(battle.getBattleId(), list);
         }
     }
 
@@ -222,7 +237,6 @@ public final class HeldItemBattleEffects {
             atkVolume = Math.max(0.1F, SizeUtil.volume(self.getEntity()));
         }
         int selfDamage = Math.max(1, Math.round(self.getMaxHealth() * 0.01F));
-        double selfRatio = 0.01D;
 
         ExtBridge.applyDamage(battle, self.getUuid(), selfDamage);
         if (self.getEntity() != null) {

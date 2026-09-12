@@ -43,6 +43,6 @@ side="BOTH"
 [[dependencies.poketoilet]]
 modId="cobblemon_ext"
 type="optional"
-versionRange="[1.0.0,)"
+versionRange="[1.2,)"
 ordering="AFTER"
 side="BOTH"

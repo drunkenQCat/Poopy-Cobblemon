@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.poketoilet'
-version = '1.0.0'
+version = '1.2'
 
 base {
     archivesName = 'poketoilet'
@@ -65,9 +65,22 @@ repositories {
 }
 
 dependencies {
-    compileOnly fileTree('libs') { include '*.jar' }
+    compileOnly fileTree('libs') {
+        include '*.jar'
+        exclude 'cobblemon-ext-*.jar'
+    }
+    compileOnly files("libs/cobblemon-ext-${project.version}.jar")
     compileOnly "org.jetbrains.kotlin:kotlin-stdlib:2.0.20"
 }
+
+// 在真实生产方法上验证回合等待；不需要启动 Minecraft 或下载测试框架。
+tasks.register('turnRegression', Exec) {
+    def launcher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+    workingDir projectDir
+    commandLine 'node', 'showdowntest/turn_regression_test.js',
+            launcher.get().metadata.installationPath.asFile.absolutePath
+}
+tasks.named('check') { dependsOn 'turnRegression' }
 
 // ---------------------------------------------------------------
 // 一键把编译好的 mod jar 复制进 Prism 实例的 mods 目录

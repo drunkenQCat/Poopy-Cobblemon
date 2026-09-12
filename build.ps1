@@ -35,13 +35,13 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-$jar = Join-Path $PSScriptRoot "build\libs\poketoilet-1.0.0.jar"
+$jar = Join-Path $PSScriptRoot "build\libs\poketoilet-1.2.jar"
 if (-not (Test-Path $jar)) {
     Write-Host "==> 构建产物不存在：$jar" -ForegroundColor Red
     exit 1
 }
 
 Write-Host "==> 全部构建成功，已安装进整合包 mods：" -ForegroundColor Green
-Write-Host "    cobblemon-ext-1.0.0.jar"
-Write-Host "    poketoilet-1.0.0.jar"
+Write-Host "    cobblemon-ext-1.2.jar"
+Write-Host "    poketoilet-1.2.jar"
 Write-Host "    启动游戏后在日志里搜 [Poketoilet] / [cobblemon-ext] 确认加载。"
