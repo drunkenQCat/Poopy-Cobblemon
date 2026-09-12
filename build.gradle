@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.poketoilet'
-version = '1.2'
+version = file('VERSION').text.trim()
 
 base {
     archivesName = 'poketoilet'
@@ -19,6 +19,8 @@ java {
 
 // 让 mods.toml 里的 ${file.jarVersion} 解析出真实版本号
 tasks.named('jar', Jar) {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
     manifest {
         attributes 'Implementation-Version': project.version
     }
@@ -53,23 +55,20 @@ neoForge {
 }
 
 // ---------------------------------------------------------------
-// 附属模组依赖：编译期引用本机整合包内的 PoopSkyMod / Cobblemon / Kotlin
+// 构建输入由 scripts/prepare_dependencies.py 按固定 URL 与哈希准备。
 // （compileOnly：运行时由 mod 容器提供，避免与 run/mods 或 JarJar 里的
 //   同一 jar 二次加载产生模块冲突）
 // Kotlin stdlib：Cobblemon 的 Kotlin API（如 observable.subscribe 的重载）
 // 在编译期重载解析时需要 Function1 的类文件；KFF 的 -all jar 不含 stdlib，
-// 从 Maven Central 拉（走 gradle.properties 里的代理）
+// Kotlin stdlib 从 Maven Central 获取；不将运行依赖打包进发布 JAR。
 // ---------------------------------------------------------------
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    compileOnly fileTree('libs') {
-        include '*.jar'
-        exclude 'cobblemon-ext-*.jar'
-    }
-    compileOnly files("libs/cobblemon-ext-${project.version}.jar")
+    compileOnly files('.deps/cobblemon.jar', '.deps/poopsky.jar', '.deps/registrate.jar')
+    compileOnly files("cobblemon-ext/build/libs/cobblemon-ext-${project.version}.jar")
     compileOnly "org.jetbrains.kotlin:kotlin-stdlib:2.0.20"
 }
 
@@ -81,6 +80,17 @@ tasks.register('turnRegression', Exec) {
             launcher.get().metadata.installationPath.asFile.absolutePath
 }
 tasks.named('check') { dependsOn 'turnRegression' }
+
+tasks.register('bridgeRegression', Exec) {
+    workingDir projectDir
+    commandLine 'node', 'showdowntest/bridge_regression_test.js'
+}
+tasks.register('showdownRegression', Exec) {
+    workingDir projectDir
+    commandLine 'node', 'showdowntest/headless_test.js', '.deps/showdown',
+            'cobblemon-ext/src/main/resources/assets/cobblemon_ext/showdown/cobblemon_ext_patch.js'
+}
+tasks.named('check') { dependsOn 'bridgeRegression', 'showdownRegression' }
 
 // ---------------------------------------------------------------
 // 一键把编译好的 mod jar 复制进 Prism 实例的 mods 目录

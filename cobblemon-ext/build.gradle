@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'com.poketoilet'
-version = '1.2'
+version = file('../VERSION').text.trim()
 
 base {
     archivesName = 'cobblemon-ext'
@@ -21,6 +21,8 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 tasks.named('jar', Jar) {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
     manifest {
         attributes 'Implementation-Version': project.version
     }
@@ -41,19 +43,8 @@ repositories {
 }
 
 dependencies {
-    compileOnly fileTree('libs') { include '*.jar' }
+    compileOnly files('../.deps/cobblemon.jar')
     compileOnly "org.jetbrains.kotlin:kotlin-stdlib:2.0.20"
-}
-
-// 构建产物同步到 poketoilet 工程的 libs 目录（其 compileOnly fileTree 自动拾取）
-def poketoiletLibsDir = rootProject.layout.projectDirectory.dir('../libs').asFile
-tasks.register('copyToPoketoiletLibs', Copy) {
-    dependsOn tasks.named('jar')
-    from(tasks.named('jar'))
-    into(poketoiletLibsDir)
-}
-tasks.named('build') {
-    finalizedBy 'copyToPoketoiletLibs'
 }
 
 // 一键安装进 Prism 实例 mods 目录

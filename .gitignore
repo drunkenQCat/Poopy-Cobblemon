@@ -24,3 +24,8 @@ libs/
 *.log
 Thumbs.db
 .DS_Store
+
+# Downloaded, hash-verified build inputs and release output
+.deps/
+dist/
+__pycache__/

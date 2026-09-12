@@ -1,165 +1,191 @@
-# Poketoilet —— PoopSkyMod × Cobblemon 附属模组
+# Poketoilet 1.2
 
-“天空宝可梦厕所 v1.0”整合包专用 **addon**：在 [PoopSkyMod](https://github.com/Altnoir/PoopSkyMod)
-和 [Cobblemon](https://github.com/Cobblemon-Global/Cobblemon) 之间搭桥——让宝可梦能坐上 PoopSky 的厕所。
+**PoopSky × Cobblemon addon · Minecraft 1.21.1 · NeoForge · Java 21**
 
-## 玩法
+[中文](#中文) · [English](#english) · [Releases](https://github.com/drunkenQCat/poketoilet/releases) · [Issues](https://github.com/drunkenQCat/poketoilet/issues)
 
-文案上区分**厕所**（`AbstractToiletBlock` 系列，蹲坑式）和**马桶**
-（`poopsky:flush_toilet` / `poopsky:golden_flush_toilet`，坐式抽水马桶）。
+## 中文
 
-1. **宝可梦上厕所/马桶**：先用**拴绳**拴住一只宝可梦（或其他可拴生物），然后右键
-   PoopSky 的厕所或马桶——**手上拿什么都行**，判断依据是拴绳状态而不是手持物品，
-   玩家自己不上，宝可梦被牵过去坐下；相邻坑位互不影响（座椅严格归属单个方块坐标）。
-   - **厕所**：坐上本模组的隐形座椅（`poketoilet:seat`），每 2 秒调用 PoopSky 的
-     `ToiletUtil.onPoop` 产出大便（金厕所产金大便）。
-   - **马桶**：直接坐上 PoopSky 自带的 `FlushToiletEntity` 座椅，排便、金马桶判断、
-     冲水收纳全部走 PoopSky 原生逻辑；马桶盖关着时会提示先掀盖。
-   - 宝可梦用 `startRiding(seat, true)` 强制乘骑，绕过 Cobblemon `PokemonEntity.canRide`
-     的平台类型限制。
-2. **玩家坐下**：空手右键 PoopSky 厕所 → 玩家自己坐下持续排便；空手右键马桶
-   → 不干预，PoopSky 原生就会让玩家坐上去。
-3. **一触即发桥接**：宝可梦带着 PoopSky 的“一触即发”效果（如被泼对应药水）坐上
-   厕所/马桶时，立即触发（坐着期间被施加也一样：厕所走 `SeatEntity.tick`、
-   马桶走 `FlushToiletEntity.tick` 的 Mixin 兜底，均为每 tick）：
-   - ANAL_PRESSING 配方命中（矿石压制类特殊方块）→ 与玩家下蹲完全一致：拆厕 + 下方块转换；
-     普通厕所（无配方）→ 厕所直接轰碎（掉落本体）；
-   - 爆炸走 PoopSky 原生 `PoopTntUtil.triggerExplosion`（不自写爆炸逻辑），半径与
-     **宝可梦体型**挂钩：`min(18, max(1, round(2 × 线性体型)))`。线性体型 =
-     ∛(碰撞箱体积)（`SizeUtil`），种族基础体型与倍率都体现在碰撞箱里，
-     巨浪鼬和小碎钻有数量级差异，与效果等级无关。
-4. **携带物品战斗效果**（PoopSky 物品 + Cobblemon 战斗）：
-   - 两件物品已通过 datapack 标签加入 Cobblemon 的 `held/is_held_item` 与
-     `held/whitelisted_items_to_hold` 白名单（`"replace": false` 合并）。
-     装备方式：**手持物品 → 潜行+右键自己的宝可梦 → 交互轮盘选"携带物品"**
-     （服务端取主手物品装备；注意别选成旁边的"装饰物品"，也别空手开轮盘）。
-     机制：官方 `whitelisted_items_to_hold` 默认为空 = 全部放行（仅黑名单挡
-     容器类）；显式加白名单是防其他数据包启用名单后这两件被排除。
-   - **番泻叶**（`poopsky:folium_sennae`）：携带后每次使用任意技能（消耗 PP），
-     敌方所有出战宝可梦速度阶级 -1（真实 boost，可叠加至 -6，影响出手顺序）。
-   - **帝王火龙果**（`poopsky:king_of_dragon_fruit`）：进入战斗时对自己造成固定
-     1% 最大生命伤害，并对敌方每只出战宝可梦造成以下伤害，随后消耗：
-     `目标最大HP × 25% × (体积系数 + 等级差/100)`。攻击方体积不大于目标时，
-     体积系数为 `攻击方体积/目标体积`；大于目标时为
-     `1 + log₅₀₀(攻击方体积/目标体积)`。同体积同等级扣 25%，500 倍体积同等级扣 50%；
-     每高一级再增加 0.25 个百分点，每低一级减少 0.25 个百分点。
-   - 触发时通过 `PokemonBattle.broadcastChatMessage` 写入**战斗界面的战报文本流**
-     （灰色文本，双方与观战者可见），触发与否一眼可辨。
-   - 两种扣血一律**保底留 1 HP**：战斗血量权威在 Showdown 引擎，直接打至 0 会
-     脱同步；"恶系"为风味设定，实际按上述固定公式结算。
-   - 实现采用 **MonsterTrainer 模式**：`ShowdownPatchLoader` 把
-     `assets/cobblemon_ext/showdown/cobblemon_ext_patch.js` eval 进 GraalJS 引擎上下文
-     （包装 `BattleStream._writeLine`），Java 侧通过 `ShowdownService.send` 发送
-     自定义协议行 `>cobblemonext_boost / >cobblemonext_damage`，由补丁用引擎
-     原生 API（boostBy/damage）结算——速度箭头、战报、出手顺序全部真实。
-   - 在 `dev` 运行 `node showdowntest/bridge_regression_test.js` 验证完整 split 伤害协议、
-     HP 不回跳和下一回合速度顺序。旧测试只检查 `-damage` 关键字会漏掉错误包，详见 `docs/数据流与扣血缺陷分析.html`。
-   - 火龙果由出战位变化触发，等待初始参战位、实体和出球动画就绪后每次上场只执行一次；
-     不再运行五时点扣血探针。番泻叶仍在 Java 招式回调触发，降速影响后续引擎结算。
-5. **体型扫描仪**（`poketoilet:scale_scanner`，本模组物品）：对宝可梦右键读取其
-   碰撞箱体积、等效边长与倍率参考值。火龙果使用体积；一触即发爆炸半径使用等效边长。
-   合成：玻璃/铁锭/木棍竖排一列；也出现在创造物品栏"工具与实用物品"页。
-6. **原版机制不受影响**：玩家站在 PoopSky 厕所上按 Shift 蹲坑，本来就是 PoopSky 自带功能，本模组不干预。
+让宝可梦坐上 PoopSky 的厕所和抽水马桶，并为 PoopSky 携带物增加 Cobblemon 战斗效果。最初为“天空宝可梦厕所”整合包开发；现在提供独立构建与发布流程。发布包不包含整合包或前置模组。
 
-## 依赖（`mods.toml` 均为 required）
+### 安装与兼容性
 
-| 模组 | 版本要求 | 说明 |
-|---|---|---|
-| neoforge | [21.1.240,) | 必装 |
-| minecraft | [1.21.1,1.22) | 必装 |
-| **poopsky** | [2.2,) | 整合包内已有 `poopsky-2.2+NeoForge1.21.1-Hotfix2.jar` |
-| **cobblemon** | [1.7.0,) | 整合包内已有 `Cobblemon-neoforge-1.7.3+1.21.1.jar` |
+从 [Releases](https://github.com/drunkenQCat/poketoilet/releases) 下载同版的 **poketoilet-1.2.jar** 和 **cobblemon-ext-1.2.jar**，放入客户端与服务端的 `mods`。退出游戏后替换旧 JAR，每个模组只保留一个版本。
 
-## cobblemon-ext 扩展库
+| 组件 | 声明要求 | 1.2 验证基线 |
+| --- | --- | --- |
+| Java | Minecraft / Cobblemon 所需 Java 21 | Java 21 |
+| Minecraft | `[1.21.1,1.22)` | **1.21.1** |
+| NeoForge | `21.1.240+` | **21.1.240** |
+| [PoopSky](https://github.com/Altnoir/PoopSkyMod/releases) | `2.1.3+` | **2.2+NeoForge1.21.1-Hotfix2** |
+| [Cobblemon](https://modrinth.com/mod/cobblemon) | `1.7.0+` | **1.7.3 NeoForge** |
+| [Kotlin for Forge](https://modrinth.com/mod/kotlin-for-forge) | Cobblemon 1.7.3 运行时要求 `5.3+` | **5.12.0** |
+| cobblemon-ext | 安装时须为 `1.2+` | **1.2** |
 
-`dev/cobblemon-ext/` 是一个独立的库模组，把对 Cobblemon/Showdown 内部的所有
-“越界访问”收敛到一处（Fabric API 之于 Fabric 的模式）：
+**允许加载的版本范围不代表全部经过验证。** 本项目使用 Cobblemon 内部 Mixin 和 Showdown 桥接，升级前置后需要重新测试。Fabric、Forge、其他 Minecraft 版本未验证。扩展库在主模组元数据中是可选依赖，但携带物战斗效果依赖它；本发布按两个 JAR 配套安装验证。
 
-- `MOVE_USED` 事件：Mixin 进 `MoveInstruction.invoke`（Cobblemon 无公开"使用技能"事件）；
-- `BATTLE_ACTIVE_READY` 事件：Mixin 进 `ActiveBattlePokemon.setBattlePokemon`，
-  参战位全部就绪时发射（`BATTLE_STARTED_POST` 时参战位尚未分配）；
-- `ExtBridge.applyDamage / applyBoost`：引擎级伤害与能力值桥接——
-  `ShowdownPatchLoader` 把 `cobblemon_ext_patch.js` eval 进 GraalJS 引擎上下文
-  （MonsterTrainer 模式），Java 通过 `ShowdownService.send` 发送
-  `>cobblemonext_damage / >cobblemonext_boost` 协议行，由补丁用引擎原生
-  `damage/boostBy` 结算，效果真实生效（速度箭头、战报、出手顺序）。
+### 玩法
 
-若上游 Cobblemon 未来接受对应功能 PR，删除库中对应 Mixin 即可，扩展无需改动。
+- **宝可梦坐厕：**拴住宝可梦，再右键 PoopSky 厕所或马桶。依据拴绳状态判断，手上可以拿其他物品。抽水马桶需先开盖。普通厕所每 40 tick（20 TPS 下约 2 秒）调用 PoopSky 排便逻辑；抽水马桶使用 PoopSky 原生座椅、排便和冲水逻辑。
+- **玩家坐厕：**空手右键普通厕所即可坐下。PoopSky 原有的下蹲排便和马桶交互仍按原机制运行。
+- **一触即发：**宝可梦带着该效果坐厕，或坐着时获得效果，会触发 PoopSky 爆炸及配方转换；无配方时破坏厕所并掉落本体。爆炸半径随碰撞箱等效边长变化，上限 18，会改变世界方块。
+- **体型扫描仪：**用 `poketoilet:scale_scanner` 右键宝可梦查看体积、等效边长与倍率参考。合成：玻璃、铁锭、木棍从上到下竖排一列；也在创造物品栏“工具与实用物品”中。
 
-## 工作原理（源码导读）
+**装备携带物：**主手拿物品，潜行并右键自己的宝可梦，在交互轮盘选择“携带物品”，不要选“装饰物品”。本模组追加携带物标签，不替换已有标签。
 
-```
-src/main/java/com/poketoilet/
-├── Poketoilet.java                  # @Mod 入口：注册 poketoilet:seat 实体
-└── content/
-    ├── entity/SeatEntity.java       # 隐形座椅：每 40 tick 检查下方是否为 PoopSky
-    │                                #   厕所(AbstractToiletBlock)且有乘客 → 调
-    │                                #   ToiletUtil.onPoop() 产出 PoopSky 大便
-    └── handler/ToiletAddonEvents.java # PlayerInteractEvent.RightClickBlock：
-                                       #   拴绳右键 → 牵附近拴着的宝可梦
-                                       #   (PokemonEntity 优先) 坐下；空手 → 玩家坐下
+| 物品 | 当前行为 |
+| --- | --- |
+| 番泻叶 `poopsky:folium_sennae` | 招式指令有可解析目标时，该目标速度阶级降低 1，最低 -6；不消耗。当前代码处理招式目标，并非无条件影响敌方全场；没有目标的指令不会降速。 |
+| 帝王火龙果 `poopsky:king_of_dragon_fruit` | 达到配置等级上限的火属性宝可梦在入场动画结束且战斗就绪后立即触发；其他宝可梦需完整在场经历一回合。首发通常在第二回合开始触发；回合中换入要再经历下一个完整回合。结算后消耗。 |
+
+等待期间换下、倒下、失去果实或战斗结束会取消等待；重新上场重新计时。换下和战斗结束本身不消耗果实。效果写入战报，并由 Showdown 引擎结算。
+
+火龙果自身伤害请求为 `max(1, round(最大 HP × 1%))`。每个存活敌方出战目标的伤害请求为：
+
+```text
+r = 攻击方碰撞箱体积 / 目标碰撞箱体积
+f(r) = r                     当 r ≤ 1
+       1 + ln(r) / ln(500)    当 r > 1
+伤害 = max(1, round(目标最大 HP × 25% × max(0, f(r) + (攻击方等级 - 目标等级) / 100)))
 ```
 
-关键 API 直接来自两个前置模组：
+双方扣血均**至少剩余 1 HP**，实际伤害可能低于请求值。同体积同等级约扣敌方最大 HP 的 25%，500 倍体积同等级约扣 50%，有整数取整。体积有 0.1 下限和实体缺失时的回退值；应结合扫描仪观察，不应仅凭画面估算。
 
-- `com.altnoir.poopsky.content.block.abs.AbstractToiletBlock`（PoopSky 所有厕所的父类）
-- `com.altnoir.poopsky.impl.util.ToiletUtil`（`onPoop` / `isGoldenToilet` 等，全部 public static）
-- `com.cobblemon.mod.common.entity.pokemon.PokemonEntity`（Cobblemon 的宝可梦实体）
+### 构建与验证
 
-> 注意：Cobblemon 的 `com.cobblemon.mod.common.pokemon.Pokemon` 是**数据类**不是实体，
-> 场上宝可梦的实例类型是 `PokemonEntity`，判断宝可梦要用后者。
+准备 **JDK 21**（设置 `JAVA_HOME`）、**Node.js 22**、**Python 3.11+**（CI 使用 3.12），确保 `java`、`node`、`python` 可用。在仓库根目录运行：
 
-## 构建
-
-### 实机诊断（管理员权限 2）
-
-在测试存档使用 `/poketoiletdebug battle`，通过 Cobblemon 原生 PvE 接口与 8 格内最近的
-无主、未在战斗中的宝可梦开战；不会修改携带物、队伍或直接注入伤害。
-用 `/poketoiletdebug health` 把队伍实际 HP、战斗镜像 HP 和原始 Pokemon HP 写到聊天与日志，
-用于比较开场、下一回合、换人和战斗结束后的同步结果。不要把业务聊天中的计划伤害当作结算回执。
-
-**依赖来源**：`dev/libs/` 里是从整合包 `minecraft/mods/` 复制进来的 jar
-（`poopsky-2.2+NeoForge1.21.1-Hotfix2.jar`、`cobblemon-1.7.3.jar`、`kotlinforforge-5.12.0-all.jar`），
-以 **compileOnly** 引入（只编译不打包；运行时由整合包里的本体提供）。
-Cobblemon 本体是 Kotlin 写的，编译期需要 Kotlin runtime（kotlinforforge 提供）。
-如果以后整合包升级了这两个模组，把新 jar 覆盖到 `dev/libs/` 同名即可。
-
-```bat
-set JAVA_HOME=C:\Users\user\.jdks\ms-21.0.9
-set GRADLE_OPTS=-Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7890 -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7890
-cd /d "C:\Users\user\AppData\Roaming\PrismLauncher\instances\天空宝可梦厕所 v1.0\dev"
-gradlew.bat build          # 编译 + 打包 build/libs/poketoilet-1.2.jar
-gradlew.bat installToInstance   # 覆盖安装进 minecraft\mods（自动清旧版）
+```sh
+python scripts/build.py
 ```
 
-或在 PowerShell 里执行 `powershell -ExecutionPolicy Bypass -File dev\build.ps1`
-（.ps1 无法直接双击运行，这是 Windows 默认策略；脚本自带 jar 存在性检查）。
+Windows PowerShell 也可运行 `./build.ps1`。默认只构建、测试、打包，不安装游戏或发布到 GitHub。
 
-## 无头验证（已完成）
+脚本按 [`scripts/dependencies.json`](scripts/dependencies.json) 的固定 URL 下载并校验 Cobblemon、PoopSky，提取其中的 Registrate 与 Showdown 引擎到忽略提交的 `.deps/`，依次构建扩展库和主模组。不需要 PrismLauncher、私人 `libs/`、存档或额外安装 Gradle。第三方输入不打入发布 JAR。
 
-`gradlew runServer` 曾在纯服务器模式下同场加载并启动：
-`Poketoilet + PoopSky 2.1.3 + Cobblemon 1.7.3 + KotlinForForge`，
-模组列表识别、`Poketoilet 已加载：PoopSkyMod + Cobblemon 附属模组` 日志、
-Cobblemon 数据初始化（1025 个物种）、PoopSky 130 种厕所类型载入、
-服务器 `Done` 完成世界生成——全部无异常。
-要复现：先把 `dev/libs/*.jar`（及需要时更多依赖）复制到 `dev/run/mods/`。
+完整构建包括：发布脚本失败分支测试、19 项 Java 调度检查、11 项真实 Showdown 桥接回归和无界面对战检查；打包时检查版本、元数据、Mixin 类、补丁及未打入依赖。产物是 `dist/` 下的两个 JAR 和 `SHA256SUMS.txt`。
 
-## ⚠️ 网络与代理（本机必备）
+```sh
+# Linux 校验
+cd dist && sha256sum -c SHA256SUMS.txt
+```
 
-本机命令行 HTTPS 是坏的，Gradle 下载一律要走 `127.0.0.1:7890` 代理——
-参数已写进 `dev/gradle.properties` 和 `dev/build.ps1`，Clash 开着就能编译；
-（注：`build.bat` 因中文注释的编码问题已废弃，改为 `build.ps1`）；
-修好网络或换端口后请同步改这两处。
+```powershell
+# Windows：与 SHA256SUMS.txt 中对应条目比较
+Get-FileHash dist/*.jar -Algorithm SHA256
+```
 
-## 踩过的坑（给续作者）
+网络需访问 Gradle、Maven Central、NeoForge Maven、GitHub、Modrinth CDN。仓库没有固定代理；如需代理，在个人 `~/.gradle/gradle.properties` 设置 `systemProp.http.proxyHost/Port` 与 `systemProp.https.proxyHost/Port`；Python 下载使用 `HTTPS_PROXY`。不要提交个人代理配置。
 
-1. **addon 对本体模组要用 `compileOnly` + `run/mods` 放 jar**：若用 `implementation`，
-   本体依赖会二次进 classpath，ModLauncher 模块层报
-   `Modules x and y export package ... to module minecraft`（Registrate 双副本真实踩过）。
-2. **NeoForge 21.1 的 `useItemOn` 返回 `ItemInteractionResult`**（不是旧 `InteractionResult`）。
-3. **拴绳方法在 `Mob` 上**：`getLeashHolder()` / `dropLeash(boolean, boolean)` 不在 `LivingEntity` 上。
+增量开发：先运行 `python scripts/prepare_dependencies.py`，再依次在扩展目录和根目录运行各自 wrapper 的 `build`。安装至原 Prism 布局是单独操作：退出游戏后运行 `./build.ps1 -Install`，要求仓库相邻存在 `minecraft/mods`；也可手动复制两个 JAR。
 
-## 声明
+**验证边界：**自动测试不启动 Minecraft。1.2 普通首发伊布已实机验证完整一回合后触发、扣血、消耗和不重复触发。双打、换入取消等有调度层覆盖，不代表所有多人场景均已实机验收。在命令开启的测试世界，权限 2 的 `/poketoiletdebug battle` 与 8 格内最近的空闲野生宝可梦开战；`/poketoiletdebug health` 输出队伍与战斗血量。战报的计划伤害不是结算回执，应结合 HP 和日志检查。
 
-玩法设计桥接自主流模组 PoopSkyMod（MIT，作者 Altnoir 等）与 Cobblemon（MPL-2.0，
-The Cobblemon Team）。本工程不含两者的代码与资源，仅按公开 API 调用；代码许可：All rights reserved。
+### CI 与发布
+
+[Build and Release](.github/workflows/ci.yml) 对分支推送、PR、手动触发分别运行 Ubuntu 和 Windows 全量构建，保存各自的 Actions artifacts。PR 只读、不发布。
+
+1. 修改唯一版本源 [`VERSION`](VERSION)，更新 README 示例，添加 `releases/<版本>.md` 中英双语发行说明。若本地 `dist/` 留有其他版本产物，先移走该目录；打包会拒绝混入旧文件。
+2. 运行 `python scripts/build.py --tag v1.2`（替换为目标版本），将工作流变更提交并合并到默认分支 `main`，确认 CI 通过。
+3. 在目标提交上创建标签，例如 `git tag -a v1.2 -m "Poketoilet 1.2"`，再执行 `git push origin v1.2`。
+
+只有推送 `v*` 标签才会发布，标签必须等于 `v` 加 `VERSION`。两平台通过后使用本次 Ubuntu 构建产物，校验远端标签提交，上传两个 JAR 和校验文件到草稿 Release，下载复验后公开。版本含 `-` 后缀时标记为预发布。
+
+失败可在 Actions 重跑：草稿续传；已公开且文件相同则成功退出，不同则停止供维护者检查。不要移动已发布标签，修正应使用新版本。仓库需启用 Actions 并允许发布任务 `contents: write`，无需额外 PAT，但组织策略可能限制权限。手动触发只验证，不发布。
+
+首次发布前应先合并工作流：若目标提交相对默认分支新增或修改工作流，GitHub 的 Release API 可能要求内置 `GITHUB_TOKEN` 无法获得的工作流写权限。见 [GitHub 创建 Release 的权限说明](https://docs.github.com/en/rest/releases/releases#create-a-release)。
+
+### 源码与许可
+
+玩法在 `src/main/java/com/poketoilet/`；Mixin、扩展事件和 Showdown 桥接见 [`cobblemon-ext/`](cobblemon-ext/README.md)。`docs/` 是历史诊断笔记，不代表当前版本验收结论。
+
+项目元数据声明 **All rights reserved**，本次不更改许可。PoopSky、Cobblemon 及资源属于各自作者，遵循各自许可，请从上游获取依赖。本项目不隶属于 Mojang、The Pokémon Company 或 Cobblemon 团队。
+
+## English
+
+Poketoilet lets Pokémon use PoopSky toilets and flush toilets, and adds Cobblemon battle effects for PoopSky held items. Originally developed for the “Sky Pokémon Toilet” modpack, it now provides a standalone build and release process. Releases do not include the modpack or dependencies.
+
+### Installation and compatibility
+
+Download matching **poketoilet-1.2.jar** and **cobblemon-ext-1.2.jar** from [Releases](https://github.com/drunkenQCat/poketoilet/releases). Put both in `mods` on client and server. Stop the game before replacing old JARs, and retain only one version of each mod.
+
+| Component | Declared requirement | Validation baseline for 1.2 |
+| --- | --- | --- |
+| Java | Java 21 required by Minecraft / Cobblemon | Java 21 |
+| Minecraft | `[1.21.1,1.22)` | **1.21.1** |
+| NeoForge | `21.1.240+` | **21.1.240** |
+| [PoopSky](https://github.com/Altnoir/PoopSkyMod/releases) | `2.1.3+` | **2.2+NeoForge1.21.1-Hotfix2** |
+| [Cobblemon](https://modrinth.com/mod/cobblemon) | `1.7.0+` | **1.7.3 NeoForge** |
+| [Kotlin for Forge](https://modrinth.com/mod/kotlin-for-forge) | Cobblemon 1.7.3 runtime requirement: `5.3+` | **5.12.0** |
+| cobblemon-ext | `1.2+` when installed | **1.2** |
+
+**Accepted version ranges are not a tested compatibility matrix.** Cobblemon internal Mixins and the Showdown bridge require retesting after dependency upgrades. Fabric, Forge and other Minecraft versions are unverified. The extension is optional in addon metadata, but required for held-item battle effects; this release is validated as a two-JAR installation.
+
+### Gameplay
+
+- **Seat Pokémon:** leash a Pokémon and right-click a PoopSky toilet. The interaction checks the leash, not your current item. Open flush-toilet lids first. Ordinary toilets invoke PoopSky production every 40 ticks (about two seconds at 20 TPS); flush toilets use native PoopSky seats, production and flushing.
+- **Seat players:** right-click an ordinary toilet with an empty hand. Existing PoopSky crouching and flush-toilet interactions retain their original behavior.
+- **On the Verge:** a Pokémon with this effect triggers PoopSky's explosion and recipe conversion when seated, including when the effect is applied after seating. Without a matching recipe, the toilet breaks and drops itself. Radius scales with collision-box equivalent side length, capped at 18. This changes world blocks.
+- **Scale Scanner:** right-click a Pokémon with `poketoilet:scale_scanner` to inspect volume, equivalent side length and scale references. Craft with glass, an iron ingot and a stick in a vertical column, top to bottom. Also available under Tools & Utilities in creative mode.
+
+**Equip held items:** hold the item in your main hand, sneak-right-click your Pokémon and choose “Held Item,” not “Cosmetic Item.” The addon appends held-item tags without replacing existing entries.
+
+| Item | Current behavior |
+| --- | --- |
+| Folium Sennae `poopsky:folium_sennae` | Lowers the move instruction's resolved target's Speed by one stage, down to -6. Not consumed. It operates on the move target, not unconditionally on every opponent; instructions without a resolved target do nothing. |
+| King of Dragon Fruit `poopsky:king_of_dragon_fruit` | A Fire-type at the configured level cap activates after its entry animation and battle readiness. Other holders must remain on the field for a complete turn. Leads normally activate at turn two; mid-turn switch-ins wait through the following complete turn. Consumed on activation. |
+
+Switching out, fainting, losing the fruit or ending the battle cancels a pending activation. Re-entry starts a new wait. Switching out and ending the battle do not themselves consume the fruit. Effects appear in the battle log and are processed through Showdown.
+
+Requested self-damage is `max(1, round(max HP × 1%))`. Requested damage to each living active opponent is:
+
+```text
+r = attacker's collision-box volume / target's collision-box volume
+f(r) = r                     if r ≤ 1
+       1 + ln(r) / ln(500)    if r > 1
+Damage = max(1, round(target max HP × 25% × max(0, f(r) + (attacker level - target level) / 100)))
+```
+
+Both sides **retain at least 1 HP**, so actual damage can be lower. Equal volume and level request roughly 25% of target max HP; 500 times the volume at equal level requests roughly 50%, subject to integer rounding. Volumes have a 0.1 floor and missing-entity fallbacks. Use the scanner rather than visual size alone.
+
+### Building and validation
+
+Install **JDK 21** (`JAVA_HOME`), **Node.js 22** and **Python 3.11+** (CI uses 3.12), with `java`, `node` and `python` available. From the repository root:
+
+```sh
+python scripts/build.py
+```
+
+Windows PowerShell users can also run `./build.ps1`. By default, this only builds, tests and packages; it does not install into Minecraft or publish to GitHub.
+
+The script downloads fixed URLs and verifies hashes from [`scripts/dependencies.json`](scripts/dependencies.json), extracts bundled Registrate and Showdown into ignored `.deps/`, then builds the extension before the addon. No PrismLauncher, private `libs/`, save files or separately installed Gradle is needed. Dependencies are not bundled into release JARs.
+
+The full build runs release-script failure-path tests, 19 Java scheduling checks, 11 real Showdown bridge checks and a headless battle test. Packaging checks versions, metadata, Mixin classes, the extension patch and absence of bundled dependencies. `dist/` contains two JARs and `SHA256SUMS.txt`.
+
+On Linux, verify with `cd dist && sha256sum -c SHA256SUMS.txt`. On Windows, run `Get-FileHash dist/*.jar -Algorithm SHA256` and compare the corresponding entries.
+
+Network access is needed for Gradle, Maven Central, NeoForge Maven, GitHub and the Modrinth CDN. No proxy is hardcoded. If necessary, configure `systemProp.http.proxyHost/Port` and `systemProp.https.proxyHost/Port` in your own `~/.gradle/gradle.properties`; Python downloads honor `HTTPS_PROXY`. Do not commit personal proxy settings.
+
+For incremental builds, first run `python scripts/prepare_dependencies.py`, then each Gradle wrapper's `build`, extension first. Installation into the original Prism layout is separate: stop the game and run `./build.ps1 -Install`, which requires a sibling `minecraft/mods` directory, or copy both JARs manually.
+
+**Validation limits:** automated tests do not launch Minecraft. In-game testing of a lead Eevee confirmed activation after a complete turn, HP changes, consumption and no repeat activation. Doubles and switch cancellation have scheduling-level coverage, not exhaustive multiplayer gameplay acceptance. In a test world with commands enabled, permission-level-2 `/poketoiletdebug battle` starts a battle with the nearest idle wild Pokémon within eight blocks; `/poketoiletdebug health` reports party and battle HP. Planned damage in the log is not an engine receipt; inspect HP and logs together.
+
+### CI and releases
+
+[Build and Release](.github/workflows/ci.yml) runs full Ubuntu and Windows builds on branch pushes, PRs and manual dispatches, retaining separate Actions artifacts. PRs run read-only and never publish.
+
+1. Update the single version source [`VERSION`](VERSION), refresh README examples and add bilingual `releases/<version>.md` notes. Move aside a local `dist/` containing another version; packaging rejects stale files.
+2. Run `python scripts/build.py --tag v1.2` (substitute your version), commit and merge workflow changes into the default `main` branch, and confirm CI passes.
+3. Tag the intended commit, for example `git tag -a v1.2 -m "Poketoilet 1.2"`, then `git push origin v1.2`.
+
+Only `v*` tag pushes publish, and the tag must equal `v` plus `VERSION`. After both platforms pass, the workflow uses that run's Ubuntu artifacts, verifies the remote tag's commit, uploads both JARs and checksums to a draft, downloads them for verification, then publishes. Versions with a `-` suffix become prereleases.
+
+Retry failures in Actions: unfinished drafts resume; identical published assets are left unchanged, while differing assets stop for maintainer review. Never move a published tag; use a new version for corrections. Enable Actions and allow the release job `contents: write`; no extra PAT is needed, though organization policy can restrict permissions. Manual dispatch validates without publishing.
+
+Merge workflow changes before the first release: if the target commit adds or changes workflows relative to the default branch, GitHub's Release API may require workflow-write permission unavailable to the built-in `GITHUB_TOKEN`. See [GitHub's release creation permission notes](https://docs.github.com/en/rest/releases/releases#create-a-release).
+
+### Source and licensing
+
+Gameplay lives in `src/main/java/com/poketoilet/`; see [`cobblemon-ext/`](cobblemon-ext/README.md) for Mixins, extension events and the Showdown bridge. Files under `docs/` are historical diagnostics, not current acceptance results.
+
+Project metadata declares **All rights reserved**; this update does not change the license. PoopSky, Cobblemon and their assets belong to their authors under their respective licenses. Obtain dependencies upstream. This project is not affiliated with Mojang, The Pokémon Company or the Cobblemon team.

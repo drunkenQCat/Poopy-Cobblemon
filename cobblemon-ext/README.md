@@ -1,57 +1,49 @@
-# cobblemon-ext —— Cobblemon 扩展 API 补齐库
+# cobblemon-ext 1.2
 
-把对 Cobblemon / Showdown 内部的“越界访问”收敛到一个独立库模组，
-让上层附属（如 poketoilet）只依赖干净的 Java API。
+[中文](#中文) · [English](#english) · [Poketoilet README](../README.md)
 
-## 提供的能力
+## 中文
 
-| API | 说明 | 实现手段 |
-|---|---|---|
-| `ExtEvents.MOVE_USED` | 每次战斗指令使用技能（消耗 PP）时触发 | Mixin 进 `MoveInstruction.invoke`（Cobblemon 无公开事件） |
-| `ExtEvents.BATTLE_ACTIVE_READY` | 战斗的参战位全部分配完毕时触发（每场一次） | Mixin 进 `ActiveBattlePokemon.setBattlePokemon`（`BATTLE_STARTED_POST` 时参战位尚未分配） |
-| `ExtEvents.ACTIVE_POKEMON_CHANGED` | 出战位换入/换下时触发；相同对象重复赋值不触发 | setter 前后比较 BattlePokemon 对象；消费者自行等待出球动画与实体就绪 |
-| `ExtBridge.applyDamage(battle, uuid, amount)` | 引擎原生真实伤害（保底留 1 HP） | `ShowdownService.send` 发 `>cobblemonext_damage` 协议行，由注入的 JS 补丁拦截并用引擎 `damage()` 结算 |
-| `ExtBridge.applyBoost(battle, uuid, stat, stages)` | 引擎原生能力值变化（真实影响出手顺序） | 同上，`>cobblemonext_boost` 行 + 引擎 `boostBy()` |
+独立的 NeoForge 扩展库，集中处理 Cobblemon 事件与 Showdown 伤害、能力值协议。1.2 验证基线为 Minecraft 1.21.1、NeoForge 21.1.240、Cobblemon 1.7.3、Java 21。它依赖 Cobblemon 内部实现，升级上游后必须复测。
 
-## 用法
+| 接口 | 语义 |
+| --- | --- |
+| `ExtEvents.MOVE_USED` | `MoveInstruction.invoke` 返回后发射；提供使用者、可空目标和招式。该指令可包含延后分发，不能视为所有动画已完成。 |
+| `BATTLE_ACTIVE_READY` | 初始参战位全部分配后，每场一次；不等于实体出球动画结束。 |
+| `ACTIVE_POKEMON_CHANGED` | 出战位的 `BattlePokemon` 对象改变时发射；换下可能变成 null。 |
+| `BATTLE_TURN` | `PokemonBattle.turn(int)` 实际执行后发射，过滤重复或倒退回合号。 |
+| `BATTLE_ENDED` | 战斗结束，清理回合与就绪记录并通知订阅者。 |
+| `currentTurn(battleId)` | 最新实际回合号，尚未开始或已清理时为 0。 |
+| `ExtBridge.applyDamage(battle, uuid, amount)` | 向引擎请求伤害，限制至少剩余 1 HP。 |
+| `ExtBridge.applyBoost(battle, uuid, stat, stages)` | 向引擎请求能力阶级变化。 |
 
-```java
-// 模组构造时订阅（cobblemon_ext 在 mods 目录即可）
-ExtEvents.MOVE_USED.add(event -> { ... });          // MoveUsedEvent(battle, user, target, move)
-ExtEvents.BATTLE_ACTIVE_READY.add(battle -> { ... });
+订阅者列表在模组初始化时添加一次；处理器应自行检查存活、携带物、实体和动画就绪状态。通过 `ExtBridge.ensurePatched()` 尝试初始化，再用 `ExtBridge.isPatched()` 确认后发送请求。
 
-// 触发引擎级效果
-ExtBridge.ensurePatched();
-ExtBridge.applyBoost(battle, targetUuid, "spe", -1);
-ExtBridge.applyDamage(battle, targetUuid, 50);
-```
+补丁 `assets/cobblemon_ext/showdown/cobblemon_ext_patch.js` 在运行中的 GraalJS 上下文包装 `BattleStream._writeLine`，处理 `>cobblemonext_damage` 与 `>cobblemonext_boost`。不覆盖 Cobblemon 文件。HP 消息必须保持 Showdown 的 split 私有/公开协议；聊天提示不是 HP 同步成功的证据。
 
-## 原理
+在仓库根目录运行 `python scripts/build.py`，统一下载锁定依赖、构建两个模组并测试。只构建库可先在根目录运行 `python scripts/prepare_dependencies.py`，再进入本目录运行 `./gradlew build`（Windows 使用 `./gradlew.bat build`）。版本统一读取根目录 `VERSION`，本目录 wrapper 可单独工作；根目录主模组读取本目录 `build/libs/` 的产物。
 
-`ShowdownPatchLoader` 通过 `GraalShowdownService.getContext()` 拿到 GraalJS 上下文，
-把 `assets/cobblemon_ext/showdown/cobblemon_ext_patch.js` 直接 eval 进运行中的
-Showdown 引擎（MonsterTrainer 模式，不覆盖任何文件）。补丁包装
-`BattleStream._writeLine`，拦截本库自定义协议行 `>cobblemonext_*`，
-用引擎原生 API（`boostBy` / `damage`）结算——战报、UI、回合顺序全部由引擎自己处理。
+完整构建运行回合调度、Showdown 桥接和无界面对战检查，不替代 Minecraft 实机验证。安装与发布请按[主 README](../README.md)操作。
 
-伤害必须用 `battle.add('-damage', target, target.getHealth)` 传入函数，生成
-`|split|side` 与私有/公开 HP 两条消息。传 `target.getHealth()` 会输出
-`[object Object]` 且没有 split，Cobblemon 不会创建伤害指令。
-`BattleStream._write` 会自动发送更新。业务聊天提示本身不能作为 HP 同步成功的证据。
+## English
 
-在父级 `dev` 运行 `node showdowntest/bridge_regression_test.js` 可验证实际 index.js 桥接输出，
-包括完整伤害包、速度顺序、保底 HP 和换人。此测试不替代 Minecraft 实机验证。
+A standalone NeoForge extension library for Cobblemon events and Showdown damage/stat protocols. The 1.2 baseline is Minecraft 1.21.1, NeoForge 21.1.240, Cobblemon 1.7.3 and Java 21. It depends on Cobblemon internals; upstream upgrades require retesting.
 
-上游 Cobblemon 若未来接受对应功能（公开事件 / 伤害桥接），删除库中对应的
-Mixin / 补丁即可，订阅方代码无需改动。
+| API | Meaning |
+| --- | --- |
+| `ExtEvents.MOVE_USED` | Emitted after `MoveInstruction.invoke` returns, with user, nullable target and move. The instruction may enqueue later dispatches; this does not guarantee completed animations. |
+| `BATTLE_ACTIVE_READY` | Once per battle after initial active slots are assigned; entry animations may still be running. |
+| `ACTIVE_POKEMON_CHANGED` | The slot's `BattlePokemon` identity changes, including becoming null on switch-out. |
+| `BATTLE_TURN` | After `PokemonBattle.turn(int)` executes; duplicate or backward turn numbers are ignored. |
+| `BATTLE_ENDED` | Clears stored turn/readiness state and notifies subscribers when the battle ends. |
+| `currentTurn(battleId)` | Latest executed turn, or 0 before the first turn/after cleanup. |
+| `ExtBridge.applyDamage(battle, uuid, amount)` | Requests engine damage, leaving at least 1 HP. |
+| `ExtBridge.applyBoost(battle, uuid, stat, stages)` | Requests an engine stat-stage change. |
 
-## 构建
+Subscribe once during mod initialization. Handlers must check health, held items, entity availability and animation readiness as appropriate. Call `ExtBridge.ensurePatched()`, then check `ExtBridge.isPatched()` before sending requests.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File ..\build.ps1   # 一键构建两个模组
-# 或单独构建：
-.\gradlew.bat build installToInstance                    # 构建并安装进整合包
-```
+`assets/cobblemon_ext/showdown/cobblemon_ext_patch.js` wraps `BattleStream._writeLine` in the running GraalJS context to handle `>cobblemonext_damage` and `>cobblemonext_boost`, without overwriting Cobblemon files. HP messages must retain Showdown's split private/public protocol; chat text alone does not prove HP synchronization.
 
-依赖：`libs/cobblemon-1.7.3.jar`（compileOnly，从整合包 mods 复制）、
-Kotlin stdlib（Maven，走 gradle.properties 代理）。
+Run `python scripts/build.py` at the repository root to download pinned inputs, build both mods and test. For the library alone, run `python scripts/prepare_dependencies.py` at the root, then `./gradlew build` in this directory (`./gradlew.bat build` on Windows). Both projects read the root `VERSION`; the addon compiles against this directory's `build/libs/` output.
+
+The full build runs scheduling, Showdown bridge and headless battle checks, which do not replace in-game validation. See the [main README](../README.md) for installation and releases.
