@@ -2,9 +2,9 @@
  * Poketoilet Showdown 补丁无头测试
  *
  * 用整合包的 Showdown 引擎（minecraft/showdown）跑一场真实对战，
- * 注入 poketoilet_patch.js，验证两条自定义协议行的引擎级效果：
- *   1. poketoilet_senna      → 敌方速度 -1（真实 boost + -unboost 战报）
- *   2. poketoilet_dragonfruit → 真实扣血（保底 1 HP）
+ * 注入 cobblemon_ext_patch.js，验证两条自定义协议行的引擎级效果：
+ *   1. cobblemonext_boost  → 敌方速度 -1（真实 boost + -unboost 战报）
+ *   2. cobblemonext_damage → 真实扣血 + 完整 split 协议（保底 1 HP）
  *
  * 用法：node headless_test.js <showdown目录> <补丁JS路径>
  */
@@ -35,15 +35,6 @@ const patchSource = fs.readFileSync(patchFile, 'utf8');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function makeSet(name) {
-  return {
-    name, species: name, level: 50,
-    moves: ['thunderbolt'], ability: 'static', nature: 'Hardy', item: '',
-    evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
-    ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
-  };
-}
-
 async function main() {
   let failures = 0;
   const check = (label, ok) => {
@@ -60,7 +51,7 @@ async function main() {
   // Cobblemon fork 的队伍打包格式：
   // name|species|uuid|currentHealth|status|statusDuration|item|ability|moves|movesInfo|nature|evs|gender|ivs|shiny|level|misc|
   const cobbleTeam = (name, species, ability, move, level, uuid) =>
-    [name, species, uuid, '10000', '', '0', '', ability, move, '15/15', 'Hardy', '', '', '', '', String(level), ''].join('|') + '|';
+    [name, species, uuid, '100', '', '0', '', ability, move, '15/15', 'Hardy', '', '', '', '', String(level), ''].join('|') + '|';
 
   const team1 = cobbleTeam('Pikachu', 'pikachu', 'static', 'thunderbolt', 50, crypto.randomUUID());
   const team2 = cobbleTeam('Charmander', 'charmander', 'blaze', 'scratch', 50, crypto.randomUUID());
@@ -92,10 +83,20 @@ async function main() {
 
   // ---- 帝王火龙果：真实扣血（cobblemonext_damage 协议行）----
   const hpBefore = p1.hp;
+  const damageLogStart = battleLog.length;
   stream.write('>cobblemonext_damage {"target":"' + p1.uuid + '","amount":50}');
   await sleep(300);
   check('火龙果：扣血 50（' + hpBefore + ' → ' + p1.hp + '）', p1.hp === hpBefore - 50);
   check('火龙果：战报含 -damage', battleLog.includes('-damage'));
+  const damageLog = battleLog.slice(damageLogStart);
+  console.log('  实际伤害协议:\n' + damageLog.trim());
+  check('火龙果：血量字段不能是对象字符串', !damageLog.includes('[object Object]'));
+  const damageLines = damageLog.trim().split('\n');
+  const splitIndex = damageLines.indexOf('|split|p1');
+  check('火龙果：Cobblemon split 伤害包完整（私有精确HP + 公开HP）',
+    splitIndex >= 0 &&
+    damageLines[splitIndex + 1] === '|-damage|' + p1.toString() + '|' + p1.getHealth().secret &&
+    damageLines[splitIndex + 2] === '|-damage|' + p1.toString() + '|' + p1.getHealth().shared);
 
   // ---- 保底 1 HP ----
   stream.write('>cobblemonext_damage {"target":"' + p2.uuid + '","amount":99999}');
