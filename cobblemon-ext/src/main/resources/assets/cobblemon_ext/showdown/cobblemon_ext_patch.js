@@ -100,6 +100,9 @@
             var dmg = Math.min(amount, target.hp - 1);
             if (dmg > 0) {
               target.damage(dmg, target);
+              // 引擎的 damage() 不发协议消息，必须手动补 -damage，
+              // Cobblemon 的 DamageInstruction 才会同步血条与持久化数据
+              this.battle.add('-damage', target, target.getHealth());
             }
           }
           record.hpAfter = target.hp;

@@ -95,6 +95,7 @@ async function main() {
   stream.write('>cobblemonext_damage {"target":"' + p1.uuid + '","amount":50}');
   await sleep(300);
   check('火龙果：扣血 50（' + hpBefore + ' → ' + p1.hp + '）', p1.hp === hpBefore - 50);
+  check('火龙果：战报含 -damage', battleLog.includes('-damage'));
 
   // ---- 保底 1 HP ----
   stream.write('>cobblemonext_damage {"target":"' + p2.uuid + '","amount":99999}');
