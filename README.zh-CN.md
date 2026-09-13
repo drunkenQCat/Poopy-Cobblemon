@@ -41,8 +41,12 @@
 安装 **JDK 21**、**Node.js 22** 和 **Python 3.11+**，设置 `JAVA_HOME`，然后运行：
 
 ```sh
+git clone --recurse-submodules https://github.com/drunkenQCat/Poopy-Cobblemon.git
+cd Poopy-Cobblemon
 python scripts/build.py
 ```
+
+已有工作副本在拉取后运行 `git submodule update --init --recursive`。[Cobblemon Ext](https://github.com/drunkenQCat/cobblemon-ext) 拥有独立仓库、版本、测试与发布流程；本仓库通过 Git 子模块固定使用已验证的提交。
 
 脚本下载并校验[锁定的依赖](scripts/dependencies.json)，构建两个模组，运行调度与 Showdown 回归检查，在 `dist/` 生成两个 JAR 和 `SHA256SUMS.txt`。无需安装整合包。
 
@@ -56,6 +60,8 @@ Windows 下也可运行 `./build.ps1`。`./build.ps1 -Install` 会额外将 JAR 
 2. 用目标版本运行 `python scripts/build.py --tag v1.2`，提交到 `main`，等待 CI 通过。
 3. 创建并推送对应标签：`git tag -a v1.2 -m "Poopy Cobblemon 1.2"`，再执行 `git push origin v1.2`。
 
+`VERSION` 管理主模组版本，`cobblemon-ext/VERSION` 管理扩展库版本。更新扩展时，先推送扩展仓库的提交，再在本仓库提交新的子模块引用。发布包按各自版本收录两个模组。
+
 发布任务核对标签，上传草稿，下载复验产物后再公开。失败的草稿可以重跑；已经公开的文件不能换成不同内容，修正请使用新版本。
 
 自动测试覆盖回合调度和 Showdown 桥接。普通首发伊布已在游戏中验证第二回合触发与道具消耗；多人场景的验证仍有限。
@@ -64,4 +70,4 @@ Windows 下也可运行 `./build.ps1`。`./build.ps1 -Install` 会额外将 JAR 
 
 代码使用 [MIT](LICENSE) 许可；原创非代码资源使用 [CC BY-NC 4.0](LICENSE-ASSETS.md)。Showdown JavaScript 补丁属于代码，使用 MIT。
 
-扩展接口见 [cobblemon-ext](cobblemon-ext/README.zh-CN.md)。第三方依赖遵循各自许可。本项目与 Mojang、The Pokémon Company 和 Cobblemon 团队无隶属关系。
+扩展接口见 [cobblemon-ext](https://github.com/drunkenQCat/cobblemon-ext/blob/main/README.zh-CN.md)。第三方依赖遵循各自许可。本项目与 Mojang、The Pokémon Company 和 Cobblemon 团队无隶属关系。

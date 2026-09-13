@@ -11,11 +11,6 @@ try {
         if (-not (Test-Path -LiteralPath $modsPath -PathType Container)) {
             throw "Instance mods directory not found: $modsPath"
         }
-        Push-Location cobblemon-ext
-        try {
-            & ./gradlew.bat installToInstance --console=plain
-            if ($LASTEXITCODE -ne 0) { throw 'Extension installation failed' }
-        } finally { Pop-Location }
         & ./gradlew.bat installToInstance --console=plain
         if ($LASTEXITCODE -ne 0) { throw 'Addon installation failed' }
     }

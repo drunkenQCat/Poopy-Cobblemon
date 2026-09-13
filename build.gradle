@@ -6,6 +6,7 @@ plugins {
 
 group = 'com.poopycobblemon'
 version = file('VERSION').text.trim()
+def extVersion = file('cobblemon-ext/VERSION').text.trim()
 
 base {
     archivesName = 'poopy-cobblemon'
@@ -71,7 +72,7 @@ repositories {
 
 dependencies {
     compileOnly files('.deps/cobblemon.jar', '.deps/poopsky.jar', '.deps/registrate.jar')
-    compileOnly files("cobblemon-ext/build/libs/cobblemon-ext-${project.version}.jar")
+    compileOnly files("cobblemon-ext/build/libs/cobblemon-ext-${extVersion}.jar")
     compileOnly "org.jetbrains.kotlin:kotlin-stdlib:2.0.20"
 }
 
@@ -84,34 +85,29 @@ tasks.register('turnRegression', Exec) {
 }
 tasks.named('check') { dependsOn 'turnRegression' }
 
-tasks.register('bridgeRegression', Exec) {
-    workingDir projectDir
-    commandLine 'node', 'showdowntest/bridge_regression_test.js'
-}
-tasks.register('showdownRegression', Exec) {
-    workingDir projectDir
-    commandLine 'node', 'showdowntest/headless_test.js', '.deps/showdown',
-            'cobblemon-ext/src/main/resources/assets/cobblemon_ext/showdown/cobblemon_ext_patch.js'
-}
-tasks.named('check') { dependsOn 'bridgeRegression', 'showdownRegression' }
-
 // ---------------------------------------------------------------
 // 一键把编译好的 mod jar 复制进 Prism 实例的 mods 目录
 // 用法：gradlew installToInstance
 // ---------------------------------------------------------------
 def instanceModsDir = rootProject.layout.projectDirectory.dir('../minecraft/mods').asFile
+def extensionJar = file("cobblemon-ext/build/libs/cobblemon-ext-${extVersion}.jar")
 tasks.register('installToInstance', Copy) {
     dependsOn tasks.named('jar')
     from(tasks.named('jar'))
+    from(extensionJar)
     into(instanceModsDir)
     doFirst {
+        if (!extensionJar.isFile()) {
+            throw new GradleException('Build both mods first with python scripts/build.py')
+        }
         if (!instanceModsDir.exists()) {
             throw new GradleException("找不到实例 mods 目录: ${instanceModsDir}")
         }
         // Remove earlier builds under either filename before installing the renamed mod.
         delete fileTree(instanceModsDir) {
             include 'poopy-cobblemon-*.jar', 'poopy-cobblemon-*.jar.duplicate',
-                    'poketoilet-*.jar', 'poketoilet-*.jar.duplicate'
+                    'poketoilet-*.jar', 'poketoilet-*.jar.duplicate',
+                    'cobblemon-ext-*.jar', 'cobblemon-ext-*.jar.duplicate'
         }
         println ">>> 正把 mod jar 安装到: ${instanceModsDir}"
     }

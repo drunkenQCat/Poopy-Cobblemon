@@ -1,0 +1,3 @@
+[submodule "cobblemon-ext"]
+	path = cobblemon-ext
+	url = https://github.com/drunkenQCat/cobblemon-ext.git

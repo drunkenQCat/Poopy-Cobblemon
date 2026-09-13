@@ -68,16 +68,33 @@ def validate_jar(path: Path, mod_id: str, version: str) -> None:
             archive.read('assets/cobblemon_ext/showdown/cobblemon_ext_patch.js')
 
 
+def extension_version() -> str:
+    path = ROOT / 'cobblemon-ext/VERSION'
+    if not path.is_file():
+        raise ValueError('Initialize the extension with: git submodule update --init --recursive')
+    version = path.read_text('utf-8').strip()
+    if not re.fullmatch(r'\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?', version):
+        raise ValueError(f'Invalid cobblemon-ext VERSION: {version!r}')
+    return version
+
+
+def mod_artifacts(version: str) -> list[tuple[str, str, str]]:
+    ext_version = extension_version()
+    return [(f'poopy-cobblemon-{version}.jar', 'poopy_cobblemon', version),
+            (f'cobblemon-ext-{ext_version}.jar', 'cobblemon_ext', ext_version)]
+
+
 def asset_names(version: str) -> list[str]:
-    return [f'poopy-cobblemon-{version}.jar', f'cobblemon-ext-{version}.jar', 'SHA256SUMS.txt']
+    return [name for name, _, _ in mod_artifacts(version)] + ['SHA256SUMS.txt']
 
 
 def package() -> None:
     version = validate_version()
-    sources = [ROOT / 'build/libs' / f'poopy-cobblemon-{version}.jar',
-               ROOT / 'cobblemon-ext/build/libs' / f'cobblemon-ext-{version}.jar']
-    for path, mod_id in zip(sources, ('poopy_cobblemon', 'cobblemon_ext')):
-        validate_jar(path, mod_id, version)
+    artifacts = mod_artifacts(version)
+    sources = [ROOT / directory / name for directory, (name, _, _) in
+               zip(('build/libs', 'cobblemon-ext/build/libs'), artifacts)]
+    for path, (_, mod_id, mod_version) in zip(sources, artifacts):
+        validate_jar(path, mod_id, mod_version)
     output = ROOT / 'dist'
     output.mkdir(exist_ok=True)
     # Refuse stale output instead of accidentally uploading an older version.
@@ -97,8 +114,8 @@ def verify_assets(directory: Path, version: str) -> None:
     expected = ''.join(f'{digest(directory / name)}  {name}\n' for name in asset_names(version)[:2])
     if (directory / 'SHA256SUMS.txt').read_text('utf-8') != expected:
         raise ValueError('Release checksum mismatch')
-    for name, mod_id in zip(asset_names(version)[:2], ('poopy_cobblemon', 'cobblemon_ext')):
-        validate_jar(directory / name, mod_id, version)
+    for name, mod_id, mod_version in mod_artifacts(version):
+        validate_jar(directory / name, mod_id, mod_version)
 
 
 def gh(*arguments: str) -> str:

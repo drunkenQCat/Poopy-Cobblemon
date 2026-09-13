@@ -41,8 +41,12 @@ Dragon Fruit damages the holder and each active opponent, leaving everyone at le
 Install **JDK 21**, **Node.js 22** and **Python 3.11+**, set `JAVA_HOME`, then run:
 
 ```sh
+git clone --recurse-submodules https://github.com/drunkenQCat/Poopy-Cobblemon.git
+cd Poopy-Cobblemon
 python scripts/build.py
 ```
+
+For an existing checkout, run `git submodule update --init --recursive` after pulling. [Cobblemon Ext](https://github.com/drunkenQCat/cobblemon-ext) has its own repository, version, tests and release workflow. This repository pins its tested commit as a Git submodule.
 
 The script downloads and verifies [pinned dependencies](scripts/dependencies.json), builds both mods, runs the scheduling and Showdown regression checks, and writes two JARs plus `SHA256SUMS.txt` to `dist/`. No modpack installation is needed.
 
@@ -56,6 +60,8 @@ On Windows, `./build.ps1` runs the same build. `./build.ps1 -Install` also copie
 2. Run `python scripts/build.py --tag v1.2` with the intended version, commit to `main`, and wait for CI to pass.
 3. Create and push the matching tag: `git tag -a v1.2 -m "Poopy Cobblemon 1.2"`, then `git push origin v1.2`.
 
+`VERSION` controls the addon; `cobblemon-ext/VERSION` controls the extension. To update the extension, push its commit first, then commit the new submodule reference here. Releases bundle both mods using their respective versions.
+
 The release job checks the tag, uploads a draft, verifies downloaded assets, then publishes it. Failed drafts can be retried; published files cannot be replaced with different content. Use a new version for fixes.
 
 Automated tests cover scheduling and the Showdown bridge. An in-game Eevee test confirmed the ordinary holder's turn-two activation and item consumption; multiplayer coverage is limited.
@@ -64,4 +70,4 @@ Automated tests cover scheduling and the Showdown bridge. An in-game Eevee test 
 
 Code is licensed under [MIT](LICENSE). Original non-code assets are licensed under [CC BY-NC 4.0](LICENSE-ASSETS.md). The Showdown JavaScript patch is code and uses MIT.
 
-See [cobblemon-ext](cobblemon-ext/README.md) for the extension API. Third-party dependencies retain their own licenses. This project is not affiliated with Mojang, The Pokémon Company or the Cobblemon team.
+See [cobblemon-ext](https://github.com/drunkenQCat/cobblemon-ext#readme) for the extension API. Third-party dependencies retain their own licenses. This project is not affiliated with Mojang, The Pokémon Company or the Cobblemon team.

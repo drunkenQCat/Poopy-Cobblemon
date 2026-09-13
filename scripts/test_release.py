@@ -31,6 +31,8 @@ class ReleaseTests(unittest.TestCase):
         (self.root / 'VERSION').write_text('1.2\n')
         (self.root / 'releases').mkdir()
         (self.root / 'releases/1.2.md').write_text('Release notes')
+        (self.root / 'cobblemon-ext').mkdir()
+        (self.root / 'cobblemon-ext/VERSION').write_text('1.2\n')
         for name, mod_id, directory in [('poopy-cobblemon', 'poopy_cobblemon', 'build/libs'),
                                          ('cobblemon-ext', 'cobblemon_ext', 'cobblemon-ext/build/libs')]:
             folder = self.root / directory
@@ -44,6 +46,19 @@ class ReleaseTests(unittest.TestCase):
     def test_package_contains_only_two_mods_and_checksums(self):
         release.package()
         release.verify_assets(self.root / 'dist', '1.2')
+
+    def test_extension_has_an_independent_version(self):
+        (self.root / 'cobblemon-ext/VERSION').write_text('1.3\n')
+        make_jar(self.root / 'cobblemon-ext/build/libs/cobblemon-ext-1.3.jar', 'cobblemon_ext', '1.3')
+        release.package()
+        self.assertEqual(set(p.name for p in (self.root / 'dist').iterdir()),
+                         {'poopy-cobblemon-1.2.jar', 'cobblemon-ext-1.3.jar', 'SHA256SUMS.txt'})
+        release.verify_assets(self.root / 'dist', '1.2')
+
+    def test_missing_submodule_fails_with_init_instruction(self):
+        (self.root / 'cobblemon-ext/VERSION').unlink()
+        with self.assertRaisesRegex(ValueError, 'git submodule update'):
+            release.package()
 
     def test_tag_mismatch_stops_before_download_or_publish(self):
         with self.assertRaisesRegex(ValueError, 'does not match'):
