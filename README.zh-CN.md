@@ -48,9 +48,13 @@ python scripts/build.py
 
 已有工作副本在拉取后运行 `git submodule update --init --recursive`。[Cobblemon Ext](https://github.com/drunkenQCat/cobblemon-ext) 拥有独立仓库、版本、测试与发布流程；本仓库通过 Git 子模块固定使用已验证的提交。
 
-脚本下载并校验[锁定的依赖](scripts/dependencies.json)，构建两个模组，运行调度与 Showdown 回归检查，在 `dist/` 生成两个 JAR 和 `SHA256SUMS.txt`。无需安装整合包。
+Gradle 根据 [gradle.properties](gradle.properties) 中固定的版本 ID，从 Modrinth Maven 解析 Cobblemon 和 PoopSky，并用[已提交的哈希](gradle/verification-metadata.xml)校验依赖。Ext 子模块通过 `includeBuild` 构建，两个项目的回归检查均由 Gradle 运行；脚本在 `dist/` 生成两个 JAR 和 `SHA256SUMS.txt`。无需安装整合包。增量构建可直接运行 `./gradlew build`（Windows 使用 `./gradlew.bat build`），自动解析依赖并运行所有检查。
+
+PoopSky 固定为 Modrinth 版本 `CEa86OFf`（2.2 Hotfix2），与 CurseForge 文件 8757814 一致。其内容与此前使用的 GitHub 发行文件有差异，现以 Maven 产物作为构建基准。编译所需的 Registrate 从已校验的 PoopSky JAR 中提取。
 
 Windows 下也可运行 `./build.ps1`。`./build.ps1 -Install` 会额外将 JAR 复制到仓库相邻的 `minecraft/mods` 目录；请先关闭游戏。
+
+更新 Maven 依赖时，修改版本 ID，运行 `./gradlew --write-verification-metadata sha256 build` 生成校验文件，并对照发布方核实新增哈希后提交。CI 只验证已提交的哈希。Ext 的依赖变化时，两仓库都需要更新校验文件；组合构建使用父仓库的校验文件。
 
 ## 发布
 

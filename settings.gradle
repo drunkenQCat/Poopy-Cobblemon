@@ -11,3 +11,8 @@ plugins {
 }
 
 rootProject.name = 'poopy-cobblemon'
+
+if (!file('cobblemon-ext/settings.gradle').isFile()) {
+    throw new GradleException('Initialize the extension with: git submodule update --init --recursive')
+}
+includeBuild('cobblemon-ext')

@@ -7,7 +7,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import release
-from prepare_dependencies import extract_safe
 
 
 def make_jar(path, mod_id, version='1.2', missing_mixin=False):
@@ -102,13 +101,6 @@ class ReleaseTests(unittest.TestCase):
         (self.root / 'dist/old.jar').write_bytes(b'old')
         with self.assertRaisesRegex(ValueError, 'unexpected files'):
             release.package()
-
-    def test_zip_path_traversal_fails(self):
-        malicious = self.root / 'malicious.zip'
-        with zipfile.ZipFile(malicious, 'w') as jar:
-            jar.writestr('../outside.txt', 'bad')
-        with zipfile.ZipFile(malicious) as jar, self.assertRaisesRegex(ValueError, 'Unsafe archive'):
-            extract_safe(jar, self.root / 'extract')
 
     def test_release_publish_and_retry_paths(self):
         release.package()

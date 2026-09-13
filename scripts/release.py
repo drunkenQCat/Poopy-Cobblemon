@@ -12,7 +12,7 @@ import tomllib
 import zipfile
 from pathlib import Path
 
-from prepare_dependencies import ROOT, digest
+from build_support import ROOT, digest
 
 
 def validate_version(tag: str | None = None) -> str:

@@ -58,22 +58,46 @@ neoForge {
     }
 }
 
-// ---------------------------------------------------------------
-// 构建输入由 scripts/prepare_dependencies.py 按固定 URL 与哈希准备。
-// （compileOnly：运行时由 mod 容器提供，避免与 run/mods 或 JarJar 里的
-//   同一 jar 二次加载产生模块冲突）
-// Kotlin stdlib：Cobblemon 的 Kotlin API（如 observable.subscribe 的重载）
-// 在编译期重载解析时需要 Function1 的类文件；KFF 的 -all jar 不含 stdlib，
-// Kotlin stdlib 从 Maven Central 获取；不将运行依赖打包进发布 JAR。
-// ---------------------------------------------------------------
+// Resolve external mods through Maven; keep them out of the release JAR.
 repositories {
     mavenCentral()
+    exclusiveContent {
+        forRepository {
+            maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' }
+        }
+        filter { includeGroup 'maven.modrinth' }
+    }
+}
+
+configurations {
+    poopskyArtifact { canBeConsumed = false; transitive = false }
+    compileOnly.extendsFrom poopskyArtifact
+}
+
+// PoopSky already ships Registrate. Compile against that exact bundled copy.
+def extractRegistrate = tasks.register('extractRegistrate', Sync) {
+    from({ zipTree(configurations.poopskyArtifact.singleFile) }) {
+        include 'META-INF/jarjar/Registrate-*.jar'
+        eachFile { path = 'registrate.jar' }
+        includeEmptyDirs = false
+    }
+    into layout.buildDirectory.dir('dependencies')
+    doFirst {
+        def entries = zipTree(configurations.poopskyArtifact.singleFile).matching {
+            include 'META-INF/jarjar/Registrate-*.jar'
+        }
+        if (entries.files.size() != 1) {
+            throw new GradleException('Expected exactly one bundled Registrate JAR in PoopSky')
+        }
+    }
 }
 
 dependencies {
-    compileOnly files('.deps/cobblemon.jar', '.deps/poopsky.jar', '.deps/registrate.jar')
-    compileOnly files("cobblemon-ext/build/libs/cobblemon-ext-${extVersion}.jar")
-    compileOnly "org.jetbrains.kotlin:kotlin-stdlib:2.0.20"
+    compileOnly("maven.modrinth:cobblemon:${cobblemon_version}") { transitive = false }
+    poopskyArtifact "maven.modrinth:poopsky:${poopsky_version}"
+    compileOnly files(layout.buildDirectory.file('dependencies/registrate.jar')).builtBy(extractRegistrate)
+    compileOnly "com.poopycobblemon:cobblemon-ext:${extVersion}"
+    compileOnly "org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}"
 }
 
 // 在真实生产方法上验证回合等待；不需要启动 Minecraft 或下载测试框架。
@@ -83,7 +107,7 @@ tasks.register('turnRegression', Exec) {
     commandLine 'node', 'showdowntest/turn_regression_test.js',
             launcher.get().metadata.installationPath.asFile.absolutePath
 }
-tasks.named('check') { dependsOn 'turnRegression' }
+tasks.named('check') { dependsOn 'turnRegression', gradle.includedBuild('cobblemon-ext').task(':build') }
 
 // ---------------------------------------------------------------
 // 一键把编译好的 mod jar 复制进 Prism 实例的 mods 目录
@@ -92,7 +116,7 @@ tasks.named('check') { dependsOn 'turnRegression' }
 def instanceModsDir = rootProject.layout.projectDirectory.dir('../minecraft/mods').asFile
 def extensionJar = file("cobblemon-ext/build/libs/cobblemon-ext-${extVersion}.jar")
 tasks.register('installToInstance', Copy) {
-    dependsOn tasks.named('jar')
+    dependsOn tasks.named('jar'), gradle.includedBuild('cobblemon-ext').task(':jar')
     from(tasks.named('jar'))
     from(extensionJar)
     into(instanceModsDir)
@@ -103,12 +127,18 @@ tasks.register('installToInstance', Copy) {
         if (!instanceModsDir.exists()) {
             throw new GradleException("找不到实例 mods 目录: ${instanceModsDir}")
         }
-        // Remove earlier builds under either filename before installing the renamed mod.
+        // Replace earlier builds of the two current mods before installation.
         delete fileTree(instanceModsDir) {
             include 'poopy-cobblemon-*.jar', 'poopy-cobblemon-*.jar.duplicate',
-                    'poketoilet-*.jar', 'poketoilet-*.jar.duplicate',
                     'cobblemon-ext-*.jar', 'cobblemon-ext-*.jar.duplicate'
         }
         println ">>> 正把 mod jar 安装到: ${instanceModsDir}"
     }
 }
+
+// Run packaging failure-path checks from both Gradle and the release entry point.
+tasks.register('releaseRegression', Exec) {
+    workingDir projectDir
+    commandLine 'python', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_*.py'
+}
+tasks.named('check') { dependsOn 'releaseRegression' }

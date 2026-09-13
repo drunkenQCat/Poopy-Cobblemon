@@ -48,9 +48,13 @@ python scripts/build.py
 
 For an existing checkout, run `git submodule update --init --recursive` after pulling. [Cobblemon Ext](https://github.com/drunkenQCat/cobblemon-ext) has its own repository, version, tests and release workflow. This repository pins its tested commit as a Git submodule.
 
-The script downloads and verifies [pinned dependencies](scripts/dependencies.json), builds both mods, runs the scheduling and Showdown regression checks, and writes two JARs plus `SHA256SUMS.txt` to `dist/`. No modpack installation is needed.
+Gradle resolves Cobblemon and PoopSky from Modrinth Maven using the fixed version IDs in [gradle.properties](gradle.properties), and verifies dependencies against [committed checksums](gradle/verification-metadata.xml). It builds the Ext submodule through `includeBuild`, runs both projects' regression checks, and the script writes two JARs plus `SHA256SUMS.txt` to `dist/`. No modpack installation is needed. For incremental builds, `./gradlew build` (`./gradlew.bat build` on Windows) resolves dependencies and runs all checks directly.
+
+PoopSky is pinned to Modrinth release `CEa86OFf` (2.2 Hotfix2), which is identical to CurseForge file 8757814. Its bytes differ from the previously used GitHub release; the Maven artifact is the build reference. Registrate is extracted from this verified PoopSky JAR for compilation.
 
 On Windows, `./build.ps1` runs the same build. `./build.ps1 -Install` also copies the JARs into a sibling `minecraft/mods` directory; close Minecraft first.
+
+When updating a Maven dependency, change its version ID, regenerate `gradle/verification-metadata.xml` with `./gradlew --write-verification-metadata sha256 build`, and review the new checksums against the publisher before committing. CI only verifies committed checksums. When Ext dependencies change, update verification metadata in both repositories; the parent file governs composite builds.
 
 ## Release
 
