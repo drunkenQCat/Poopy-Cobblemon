@@ -29,3 +29,4 @@ Thumbs.db
 .deps/
 dist/
 __pycache__/
+verification/

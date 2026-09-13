@@ -58,7 +58,7 @@ When updating a Maven dependency, change its version ID, regenerate `gradle/veri
 
 ## Release
 
-[GitHub Actions](.github/workflows/ci.yml) builds and tests on Ubuntu and Windows for pushes, pull requests and manual runs. Tag pushes publish a GitHub Release after both builds pass.
+[GitHub Actions](.github/workflows/ci.yml) builds, tests and previews publishing without credentials on Ubuntu and Windows, then compares SHA-256 hashes of both packages. A version tag publishes to GitHub and then CurseForge only after both builds pass and the artifacts match. Branch pushes, pull requests and manual runs only validate.
 
 1. Update [`VERSION`](VERSION) and add English notes in `releases/<version>.md`; keep Chinese notes in a separate `<version>.zh-CN.md` file.
 2. Run `python scripts/build.py --tag v1.2` with the intended version, commit to `main`, and wait for CI to pass.
@@ -67,6 +67,22 @@ When updating a Maven dependency, change its version ID, regenerate `gradle/veri
 `VERSION` controls the addon; `cobblemon-ext/VERSION` controls the extension. To update the extension, push its commit first, then commit the new submodule reference here. Releases bundle both mods using their respective versions.
 
 The release job checks the tag, uploads a draft, verifies downloaded assets, then publishes it. Failed drafts can be retried; published files cannot be replaced with different content. Use a new version for fixes.
+
+The CurseForge project ID is **1693823**; upload settings live in [publishing/curseforge.json](publishing/curseforge.json). Add `CURSEFORGE_TOKEN` under this repository's **Settings → Secrets and variables → Actions**, using a CurseForge API token with upload permission for this project. Configure each repository separately. GitHub releases use the automatically supplied Actions `GITHUB_TOKEN`; no extra personal token is needed.
+
+This repository uploads only `poopy-cobblemon-<version>.jar` to CurseForge. Cobblemon, PoopSky and Kotlin for Forge are required; Cobblemon Ext is optional (required for the held-item battle effects). Ext publishes from its own repository to project **1693831**. GitHub releases still bundle both JARs. When updating Ext, release it before the main mod.
+
+After building, inspect the proposed file, version, dependencies and changelog:
+
+```sh
+./gradlew -p publishing curseforgePreview -PreleaseTag=v1.2
+```
+
+Use `./gradlew.bat` on Windows. The preview never reads a token or calls the CurseForge API; it does not validate remote project permissions, dependency slugs or moderation status. Gradle may still download plugin dependencies on the first run. The real `curseforge` task requires an explicit `-PreleaseTag` matching `VERSION`; CI runs it against the downloaded and reverified build artifact.
+
+A successful CurseForge upload may still await moderation. If a connection fails during upload, inspect the project's file list before retrying to avoid duplicates. Choose **Re-run failed jobs** in Actions so successful publishing jobs are not repeated. A CurseForge failure does not retract an already published GitHub release.
+
+[Dependabot](.github/dependabot.yml) checks Gradle dependencies and GitHub Actions weekly; updates require review and passing CI. The publishing plugin is pinned to Java 21-compatible 1.1.28. To update it, run `./gradlew -p publishing --write-verification-metadata sha256 curseforgePreview`, verify the new checksums and commit the separate `publishing/gradle/verification-metadata.xml`. Do not accept unverified checksums just to clear a failed build.
 
 Automated tests cover scheduling and the Showdown bridge. An in-game Eevee test confirmed the ordinary holder's turn-two activation and item consumption; multiplayer coverage is limited.
 

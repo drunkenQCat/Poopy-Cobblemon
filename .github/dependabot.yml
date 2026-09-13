@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directories:
+      - "/"
+      - "/publishing"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      # The 1.2+ publishing plugin requires Java 25; this project uses Java 21.
+      - dependency-name: "net.darkhax.curseforgegradle"
+        versions: [">=1.2"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]

@@ -18,6 +18,8 @@ def main() -> None:
     wrapper = [str(ROOT / 'gradlew.bat')] if os.name == 'nt' else ['bash', str(ROOT / 'gradlew')]
     subprocess.run([*wrapper, '--no-daemon', '--console=plain', 'clean', 'build'], cwd=ROOT, check=True)
     package()
+    subprocess.run([*wrapper, '-p', 'publishing', '--no-daemon', '--console=plain',
+                    'curseforgePreview'], cwd=ROOT, check=True)
 
 
 if __name__ == '__main__':

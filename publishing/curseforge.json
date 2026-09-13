@@ -1,0 +1,20 @@
+{
+  "projectId": 1693823,
+  "artifactId": "poopy-cobblemon",
+  "displayName": "Poopy Cobblemon",
+  "gameVersions": [
+    "1.21.1",
+    "NeoForge",
+    "Java 21",
+    "Client",
+    "Server"
+  ],
+  "requiredDependencies": [
+    "cobblemon",
+    "kotlin-for-forge",
+    "poopsky"
+  ],
+  "optionalDependencies": [
+    "cobblemon-ext"
+  ]
+}

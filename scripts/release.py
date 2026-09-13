@@ -118,6 +118,16 @@ def verify_assets(directory: Path, version: str) -> None:
         validate_jar(directory / name, mod_id, mod_version)
 
 
+def compare_builds(directory: Path, version: str) -> None:
+    platforms = ('release-ubuntu-24.04', 'release-windows-2022')
+    for platform in platforms:
+        verify_assets(directory / platform, version)
+    for name in asset_names(version):
+        if digest(directory / platforms[0] / name) != digest(directory / platforms[1] / name):
+            raise ValueError(f'Ubuntu and Windows artifacts differ: {name}')
+    print('Ubuntu and Windows release artifacts are identical.', flush=True)
+
+
 def gh(*arguments: str) -> str:
     return subprocess.check_output(['gh', *arguments], text=True, encoding='utf-8').strip()
 
@@ -187,13 +197,16 @@ def download_asset(repository: str, asset_id: int, destination: Path) -> None:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('package', 'verify', 'publish'))
+    parser.add_argument('command', choices=('package', 'verify', 'compare', 'publish'))
     parser.add_argument('--tag')
+    parser.add_argument('--artifacts-dir', type=Path, default=ROOT / 'verification')
     args = parser.parse_args()
     if args.command == 'publish':
         if not args.tag:
             parser.error('publish requires --tag')
         publish(args.tag, os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA'])
+    elif args.command == 'compare':
+        compare_builds(args.artifacts_dir, validate_version(args.tag))
     elif args.command == 'package':
         validate_version(args.tag)
         package()

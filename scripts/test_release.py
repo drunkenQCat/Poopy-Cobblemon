@@ -1,5 +1,6 @@
 """Offline failure-path tests for packaging and retry-safe publishing."""
 import json
+import shutil
 import tempfile
 import unittest
 import zipfile
@@ -62,6 +63,35 @@ class ReleaseTests(unittest.TestCase):
     def test_tag_mismatch_stops_before_download_or_publish(self):
         with self.assertRaisesRegex(ValueError, 'does not match'):
             release.validate_version('v1.3')
+
+    def comparison_fixture(self):
+        release.package()
+        base = self.root / 'verification'
+        for platform in ('release-ubuntu-24.04', 'release-windows-2022'):
+            shutil.copytree(self.root / 'dist', base / platform)
+        return base
+
+    def test_cross_platform_artifacts_match(self):
+        release.compare_builds(self.comparison_fixture(), '1.2')
+
+    def test_different_valid_platform_jars_block_release(self):
+        base = self.comparison_fixture()
+        windows = base / 'release-windows-2022'
+        jar = windows / release.asset_names('1.2')[0]
+        with zipfile.ZipFile(jar, 'a') as archive:
+            archive.writestr('platform-difference.txt', 'windows only')
+        checksums = ''.join(f'{release.digest(windows / name)}  {name}\n'
+                            for name in release.asset_names('1.2')[:-1])
+        (windows / 'SHA256SUMS.txt').write_text(checksums, encoding='utf-8', newline='\n')
+        release.verify_assets(windows, '1.2')
+        with self.assertRaisesRegex(ValueError, 'artifacts differ'):
+            release.compare_builds(base, '1.2')
+
+    def test_missing_platform_artifacts_block_release(self):
+        base = self.comparison_fixture()
+        (base / 'release-windows-2022' / release.asset_names('1.2')[0]).unlink()
+        with self.assertRaisesRegex(ValueError, 'Release must contain'):
+            release.compare_builds(base, '1.2')
 
     def test_wrong_jar_version_fails(self):
         jar = self.root / 'build/libs/poopy-cobblemon-1.2.jar'

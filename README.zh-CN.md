@@ -58,7 +58,7 @@ Windows 下也可运行 `./build.ps1`。`./build.ps1 -Install` 会额外将 JAR 
 
 ## 发布
 
-[GitHub Actions](.github/workflows/ci.yml) 在推送、PR 和手动触发时运行 Ubuntu、Windows 构建与测试。推送版本标签后，两平台均通过才会发布 GitHub Release。
+[GitHub Actions](.github/workflows/ci.yml) 在推送、PR 和手动触发时运行 Ubuntu、Windows 构建、测试和免凭据发布预览，并比较两平台产物的 SHA-256。只有构建通过且产物一致，版本标签才会触发 GitHub Release，随后上传 CurseForge；普通分支、PR 和手动运行只验证。
 
 1. 更新 [`VERSION`](VERSION)，将英文发行说明写入 `releases/<版本>.md`，中文另存为 `<版本>.zh-CN.md`。
 2. 用目标版本运行 `python scripts/build.py --tag v1.2`，提交到 `main`，等待 CI 通过。
@@ -67,6 +67,22 @@ Windows 下也可运行 `./build.ps1`。`./build.ps1 -Install` 会额外将 JAR 
 `VERSION` 管理主模组版本，`cobblemon-ext/VERSION` 管理扩展库版本。更新扩展时，先推送扩展仓库的提交，再在本仓库提交新的子模块引用。发布包按各自版本收录两个模组。
 
 发布任务核对标签，上传草稿，下载复验产物后再公开。失败的草稿可以重跑；已经公开的文件不能换成不同内容，修正请使用新版本。
+
+CurseForge 项目 ID 为 **1693823**，发布设置保存在 [publishing/curseforge.json](publishing/curseforge.json)。在本仓库的 **Settings → Secrets and variables → Actions** 添加 `CURSEFORGE_TOKEN`，值为具有此项目上传权限的 CurseForge API token。两个仓库分别设置；GitHub Release 使用 Actions 自动提供的 `GITHUB_TOKEN`，无需额外个人 token。
+
+本仓库只向 CurseForge 上传 `poopy-cobblemon-<版本>.jar`，声明 Cobblemon、PoopSky、Kotlin for Forge 为必需依赖，Cobblemon Ext 为可选依赖（携带物战斗效果需要它）。Ext 由自己的仓库发布到项目 **1693831**。GitHub Release 仍收录两个 JAR。更新 Ext 时，建议先发布 Ext，再发布主模组。
+
+构建后可单独检查待上传文件、版本、依赖和发行说明：
+
+```sh
+./gradlew -p publishing curseforgePreview -PreleaseTag=v1.2
+```
+
+Windows 使用 `./gradlew.bat`。预览不会读取 token，也不会调用 CurseForge API；它不验证远端项目权限、依赖 slug 或审核状态。Gradle 首次运行仍需下载插件依赖。正式上传任务为 `curseforge`，必须显式传入与 `VERSION` 一致的 `-PreleaseTag`，CI 会下载并复验已经构建的 JAR 后执行它。
+
+CurseForge 上传成功后可能仍需审核。如果上传时网络中断，先检查项目文件列表再重试，以免重复上传；在 Actions 中选择 **Re-run failed jobs**，避免重新执行已成功的发布任务。上传失败不会撤回已经成功发布的 GitHub Release。
+
+[Dependabot](.github/dependabot.yml) 每周检查 Gradle 依赖和 GitHub Actions；更新需要人工审查和 CI 通过。发布插件固定在兼容 Java 21 的 1.1.28。升级它时运行 `./gradlew -p publishing --write-verification-metadata sha256 curseforgePreview`，核实并提交独立的 `publishing/gradle/verification-metadata.xml`。不要仅为消除校验失败而接受未核实的哈希。
 
 自动测试覆盖回合调度和 Showdown 桥接。普通首发伊布已在游戏中验证第二回合触发与道具消耗；多人场景的验证仍有限。
 

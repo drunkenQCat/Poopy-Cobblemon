@@ -1,0 +1,66 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import net.darkhax.curseforgegradle.TaskPublishCurseForge
+
+plugins {
+    // 1.2+ requires Java 25; this publisher shares the mod build's Java 21 runtime.
+    id 'net.darkhax.curseforgegradle' version '1.1.28'
+}
+
+// Publish the downloaded, verified CI artifact without rebuilding Minecraft.
+def config = new JsonSlurper().parse(file('curseforge.json'))
+def modVersion = file('../VERSION').text.trim()
+def releaseTag = providers.gradleProperty('releaseTag').orElse("v${modVersion}")
+def uploadJar = file("../dist/${config.artifactId}-${modVersion}.jar")
+def notes = file("../releases/${modVersion}.md")
+def title = "${config.displayName} ${modVersion} - NeoForge 1.21.1"
+def channel = modVersion.contains('-alpha') ? 'alpha' : (modVersion.contains('-') ? 'beta' : 'release')
+
+def verifyPackage = tasks.register('verifyPackage', Exec) {
+    workingDir file('..')
+    commandLine 'python', 'scripts/release.py', 'verify', '--tag', releaseTag.get()
+}
+
+// CurseForgeGradle 1.1.x debugMode still authenticates to resolve game version IDs.
+// Keep our preview separate so it never reads a token or calls the CurseForge API.
+tasks.register('curseforgePreview') {
+    group = 'publishing'
+    description = 'Preview the verified upload configuration without reading credentials or uploading.'
+    dependsOn verifyPackage
+    doLast {
+        println JsonOutput.prettyPrint(JsonOutput.toJson([
+            projectId: config.projectId,
+            file: uploadJar.name,
+            displayName: title,
+            releaseType: channel,
+            gameVersions: config.gameVersions,
+            requiredDependencies: config.requiredDependencies,
+            optionalDependencies: config.optionalDependencies,
+            changelogType: 'markdown',
+            changelog: notes.getText('UTF-8')
+        ]))
+    }
+}
+
+tasks.register('curseforge', TaskPublishCurseForge) {
+    group = 'publishing'
+    description = 'Upload the verified release JAR to CurseForge.'
+    dependsOn verifyPackage
+    disableVersionDetection()
+    def artifact = upload(config.projectId, uploadJar)
+    artifact.displayName = title
+    artifact.releaseType = channel
+    artifact.changelogType = 'markdown'
+    artifact.changelog = { notes.getText('UTF-8') }
+    artifact.addGameVersion(*config.gameVersions)
+    artifact.addRequirement(*config.requiredDependencies)
+    artifact.addOptional(*config.optionalDependencies)
+    doFirst {
+        if (!providers.gradleProperty('releaseTag').isPresent()) {
+            throw new GradleException('Publishing requires an explicit -PreleaseTag=v<VERSION>')
+        }
+        def token = System.getenv('CURSEFORGE_TOKEN')
+        if (!token?.trim()) throw new GradleException('CURSEFORGE_TOKEN is required for publishing')
+        apiToken = token
+    }
+}
