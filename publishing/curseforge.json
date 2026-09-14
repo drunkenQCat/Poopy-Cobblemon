@@ -12,9 +12,8 @@
   "requiredDependencies": [
     "cobblemon",
     "kotlin-for-forge",
-    "poopsky"
-  ],
-  "optionalDependencies": [
+    "poopsky",
     "cobblemon-ext"
-  ]
+  ],
+  "optionalDependencies": []
 }

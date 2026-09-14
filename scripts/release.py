@@ -39,6 +39,8 @@ def validate_jar(path: Path, mod_id: str, version: str) -> None:
             raise ValueError(f'{path}: incorrect mod metadata')
         if mod_id == 'poopy_cobblemon':
             dependency = next(d for d in metadata['dependencies'][mod_id] if d['modId'] == 'cobblemon_ext')
+            if dependency['type'] != 'required':
+                raise ValueError('Poopy Cobblemon must require cobblemon-ext when installed')
             if dependency['versionRange'] != '[1.2,)':
                 raise ValueError('Poopy Cobblemon must require cobblemon-ext API 1.2 or later when installed')
         names = set(archive.namelist())
