@@ -10,6 +10,7 @@ import com.cobblemon.mod.common.pokemon.Pokemon;
 import com.mojang.logging.LogUtils;
 import com.poopycobblemon.cobblemonext.ExtBridge;
 import com.poopycobblemon.cobblemonext.ExtEvents;
+import com.poopycobblemon.cobblemonext.handler.ExtHandlers;
 import com.poopycobblemon.util.SizeUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -80,12 +81,23 @@ public final class HeldItemBattleEffects {
             LOGGER.warn("[Poopy Cobblemon] 未安装 cobblemon_ext 库，携带物品战斗效果不可用");
             return;
         }
-        ExtEvents.MOVE_USED.add(HeldItemBattleEffects::onMoveUsed);
-        ExtEvents.ACTIVE_POKEMON_CHANGED.add(HeldItemBattleEffects::onActivePokemonChanged);
-        ExtEvents.BATTLE_ACTIVE_READY.add(battle -> battle.getActivePokemon()
-                .forEach(HeldItemBattleEffects::onActivePokemonChanged));
-        ExtEvents.BATTLE_TURN.add(event -> onBattleTurn(event.battle(), event.turn()));
-        ExtEvents.BATTLE_ENDED.add(HeldItemBattleEffects::onBattleEnded);
+        // 番泻叶：携带者每次出招 → 敌方全体速度 -1；持有物判定收进过滤器
+        ExtHandlers.subscribe(ExtEvents.MOVE_USED,
+                event -> {
+                    Pokemon user = event.user() == null ? null : event.user().getEffectedPokemon();
+                    return user != null && event.target() != null
+                            && isHolding(user, PoItems.FOLIUM_SENNAE.get());
+                },
+                HeldItemBattleEffects::onMoveUsed);
+        // 帝王火龙果：参战位变化时刷新两条触发路径的登记
+        ExtHandlers.subscribe(ExtEvents.ACTIVE_POKEMON_CHANGED,
+                HeldItemBattleEffects::onActivePokemonChanged);
+        ExtHandlers.subscribe(ExtEvents.BATTLE_ACTIVE_READY,
+                battle -> battle.getActivePokemon().forEach(HeldItemBattleEffects::onActivePokemonChanged));
+        ExtHandlers.subscribe(ExtEvents.BATTLE_TURN,
+                event -> !event.battle().getEnded(),
+                event -> onBattleTurn(event.battle(), event.turn()));
+        ExtHandlers.subscribe(ExtEvents.BATTLE_ENDED, HeldItemBattleEffects::onBattleEnded);
         NeoForge.EVENT_BUS.addListener(HeldItemBattleEffects::onServerTick);
         NeoForge.EVENT_BUS.addListener(com.poopycobblemon.battle.BattleDebugCommands::register);
         NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> {
@@ -272,7 +284,7 @@ public final class HeldItemBattleEffects {
                 holder.getDisplayName(false).getString(), selfDamage, dealt, size, holder.getLevel());
     }
 
-    /** 番泻叶：每次技能使用 → 敌方速度阶级 -1（引擎原生 boost）+ 便意倾泻表现 */
+    /** 番泻叶结算：敌方速度阶级 -1（引擎原生 boost）+ 便意倾泻表现（过滤已在注册处完成） */
     private static void onMoveUsed(ExtEvents.MoveUsedEvent event) {
         try {
             ExtBridge.ensurePatched();
@@ -280,13 +292,7 @@ public final class HeldItemBattleEffects {
                 return;
             }
             Pokemon pokemon = event.user().getEffectedPokemon();
-            if (pokemon == null || !isHolding(pokemon, PoItems.FOLIUM_SENNAE.get())) {
-                return;
-            }
             BattlePokemon target = event.target();
-            if (target == null) {
-                return;
-            }
             ExtBridge.applyBoost(event.battle(), target.getUuid(), "spe", -1);
             playSennaAnimation(event.user(), target);
             tellBattle(event.battle(), Component.translatable("message.poopy_cobblemon.senna_trigger",
