@@ -28,6 +28,7 @@ function declaration(marker) {
 const production = [
   'private static final class PendingDragonFruit',
   'private static boolean isHolding(',
+  'private static boolean hasTriggeredThisBattle(',
   'private static boolean isFireTypeMaxLevel(',
   'private static void onActivePokemonChanged(',
   'private static void onBattleEnded(',
@@ -44,6 +45,7 @@ import java.util.function.*;
 public class TurnRegression {
   static final Map<ActiveBattlePokemon, PendingDragonFruit> IMMEDIATE = new IdentityHashMap<>();
   static final Map<UUID, List<PendingDragonFruit>> TURN_WAITING = new ConcurrentHashMap<>();
+  static final Map<UUID, Set<UUID>> TRIGGERED = new ConcurrentHashMap<>();
   static final Log LOGGER = new Log();
   static class Log { void debug(String s,Object... args){} void warn(String s,Object... args){} void error(String s,Object... args){} }
   static class CobblemonExt { static final Log LOGGER = new Log(); }
@@ -72,13 +74,13 @@ public class TurnRegression {
   static class ServerTickEvent { static class Post {} }
   static class ExtBridge { static boolean patched=true; static void ensurePatched(){} static boolean isPatched(){return patched;} }
   static final List<Pokemon> triggers=new ArrayList<>();
-  static void triggerDragonFruit(PokemonBattle b,BattlePokemon self,Pokemon pokemon){triggers.add(pokemon);pokemon.item.held=false;}
+  static void triggerDragonFruit(PokemonBattle b,BattlePokemon self,Pokemon pokemon){triggers.add(pokemon);TRIGGERED.computeIfAbsent(b.id,k->java.util.concurrent.ConcurrentHashMap.newKeySet()).add(pokemon.id);}
   ${events}
   ${production}
   static int checks;
   static void check(String name,boolean ok){if(!ok)throw new AssertionError(name);checks++;System.out.println("PASS "+name);}
   static PokemonBattle fixture(){
-    IMMEDIATE.clear();TURN_WAITING.clear();triggers.clear();ExtEvents.CURRENT_TURN.clear();ExtEvents.READY_MARKED.clear();
+    IMMEDIATE.clear();TURN_WAITING.clear();TRIGGERED.clear();triggers.clear();ExtEvents.CURRENT_TURN.clear();ExtEvents.READY_MARKED.clear();
     Cobblemon.INSTANCE.max=100;ExtBridge.patched=true;return new PokemonBattle();
   }
   static ActiveBattlePokemon enter(PokemonBattle b){var a=new ActiveBattlePokemon(b);onActivePokemonChanged(a);return a;}
@@ -89,7 +91,7 @@ public class TurnRegression {
     ExtEvents.emitTurn(b,1);
     check("lead remains queued throughout turn 1",triggers.isEmpty()&&TURN_WAITING.get(b.id).size()==1);
     ExtEvents.emitTurn(b,2);
-    check("lead triggers after one complete turn and consumes fruit",triggers.size()==1&&!a.self.pokemon.item.held);
+    check("lead triggers after one complete turn and locks for the battle",triggers.size()==1&&a.self.pokemon.item.held&&hasTriggeredThisBattle(b.id,a.self.pokemon.id));
     ExtEvents.emitTurn(b,2);ExtEvents.emitTurn(b,3);
     check("later or duplicate turn events do not retrigger",triggers.size()==1&&TURN_WAITING.isEmpty());
 
@@ -118,6 +120,16 @@ public class TurnRegression {
     b=fixture();a=enter(b);ExtEvents.emitTurn(b,1);b.ended=true;ExtEvents.emitBattleEnded(b);
     check("battle end releases waits and turn state without consumption",TURN_WAITING.isEmpty()&&ExtEvents.currentTurn(b.id)==0&&a.self.pokemon.item.held);
 
+    b=fixture();a=enter(b);ExtEvents.emitTurn(b,1);ExtEvents.emitTurn(b,2);
+    check("burst locks the battle but keeps the item",triggers.size()==1&&a.self.pokemon.item.held&&hasTriggeredThisBattle(b.id,a.self.pokemon.id));
+    onActivePokemonChanged(a);ExtEvents.emitTurn(b,3);
+    check("same battle cannot trigger twice",triggers.size()==1&&TURN_WAITING.isEmpty()&&IMMEDIATE.isEmpty());
+    ExtEvents.emitBattleEnded(b);
+    var again=new PokemonBattle();a.battle=again;again.active.add(a);onActivePokemonChanged(a);
+    check("new battle re-arms the held fruit",TURN_WAITING.get(again.id).size()==1&&triggers.size()==1);
+    ExtEvents.emitTurn(again,1);ExtEvents.emitTurn(again,2);
+    check("same holder bursts again in the new battle",triggers.size()==2&&hasTriggeredThisBattle(again.id,a.self.pokemon.id));
+
     b=fixture();a=enter(b);var other=fixtureIndependent();ExtEvents.emitTurn(b,1);ExtEvents.emitTurn(b,2);
     check("one battle does not drop another battle's wait",triggers.size()==1&&TURN_WAITING.containsKey(other.id));
 
@@ -127,6 +139,8 @@ public class TurnRegression {
     check("max-level dual fire type waits for entry animation",triggers.isEmpty()&&IMMEDIATE.size()==1);
     a.self.entity.beam=0;onServerTick(new ServerTickEvent.Post());
     check("max-level fire type still triggers immediately",triggers.size()==1&&IMMEDIATE.isEmpty());
+    onActivePokemonChanged(a);
+    check("immediate path also honors the once-per-battle lock",triggers.size()==1&&IMMEDIATE.isEmpty());
 
     b=fixture();a=new ActiveBattlePokemon(b);a.self.pokemon.level=50;a.self.pokemon.types=List.of(new Type("fire"));
     Cobblemon.INSTANCE.max=50;onActivePokemonChanged(a);

@@ -32,7 +32,7 @@ To equip a held item, hold it, sneak-right-click your Pokémon and choose **Held
 | Held item | Effect |
 | --- | --- |
 | Folium Sennae | Lowers the move's resolved target's Speed by one stage, down to −6. Not consumed. A move without a resolved target has no effect. |
-| King of Dragon Fruit | Activates after a full turn on the field, then is consumed. A Fire-type at Cobblemon's configured level cap activates after its entry animation instead. |
+| King of Dragon Fruit | Activates after a full turn on the field; once per battle, the item stays held. A Fire-type at Cobblemon's configured level cap activates after its entry animation instead. |
 
 Dragon Fruit damages the holder and each active opponent, leaving everyone at least **1 HP**. At equal size and level, it deals about 25% of each opponent's maximum HP and 1% of the holder's. Larger or higher-level holders deal more damage. Switching out, fainting, losing the fruit or ending the battle cancels the wait; re-entry starts it again.
 

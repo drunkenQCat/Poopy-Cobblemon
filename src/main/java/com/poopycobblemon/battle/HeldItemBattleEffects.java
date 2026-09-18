@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -39,15 +40,17 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li><strong>番泻叶</strong>（{@code poopsky:folium_sennae}）：每次使用任意技能，
  *       敌方所有出战宝可梦速度阶级 -1（引擎原生 boost，可叠加至 -6），
  *       伴随便便抛物线动画与抽水马桶音效。</li>
- *   <li><strong>帝王火龙果</strong>（{@code poopsky:king_of_dragon_fruit}，一次性消耗）：
+ *   <li><strong>帝王火龙果</strong>（{@code poopsky:king_of_dragon_fruit}，
+ *       每场战斗限发动一次，道具不消耗）：
  *       触发时点按宝可梦是否为“满级火属性”分两条路径——
  *       <ul>
  *         <li>满级火属性：入场动画结束后立即触发；</li>
  *         <li>其他：完整在场经历一个回合后，在引擎宣布下一回合开始时触发；
- *             等待期间被换下、击倒或战斗结束则取消（果子不消耗），重新上场重新计算。</li>
+ *             等待期间被换下、击倒或战斗结束则取消，重新上场重新计算。</li>
  *       </ul>
  *       结算：自身固定损失 1% 最大生命，敌方每只出战宝可梦受到
- *       基于对数体积比与等级差的引擎真实伤害（保底留 1 HP），并播放爆炸动画。</li>
+ *       基于对数体积比与等级差的引擎真实伤害（保底留 1 HP），并播放爆炸动画。
+ *       发动过后道具保留在身上，但同一场战斗内不得再发动。</li>
  * </ul>
  */
 public final class HeldItemBattleEffects {
@@ -59,6 +62,13 @@ public final class HeldItemBattleEffects {
 
     /** 回合触发路径（其他宝可梦）：战斗 id → 等待结算列表 */
     private static final Map<UUID, List<PendingDragonFruit>> TURN_WAITING = new ConcurrentHashMap<>();
+
+    /** 本场战斗已发动过火龙果的宝可梦（战斗 id → 宝可梦 UUID）：道具不消耗，但每场限发动一次 */
+    private static final Map<UUID, Set<UUID>> TRIGGERED = new ConcurrentHashMap<>();
+
+    private static boolean hasTriggeredThisBattle(UUID battleId, UUID pokemonUuid) {
+        return TRIGGERED.getOrDefault(battleId, java.util.Set.of()).contains(pokemonUuid);
+    }
 
     private static final class PendingDragonFruit {
         final ActiveBattlePokemon active;
@@ -103,6 +113,7 @@ public final class HeldItemBattleEffects {
         NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> {
             IMMEDIATE.clear();
             TURN_WAITING.clear();
+            TRIGGERED.clear();
         });
         LOGGER.info("[Poopy Cobblemon] 携带物品战斗效果已注册（番泻叶 / 帝王火龙果）");
     }
@@ -147,6 +158,9 @@ public final class HeldItemBattleEffects {
         if (battle == null || battle.getEnded()) {
             return;
         }
+        if (hasTriggeredThisBattle(battle.getBattleId(), pokemon.getUuid())) {
+            return; // 本场战斗已发动过：果子保留，但不得再发动
+        }
         PendingDragonFruit pending = new PendingDragonFruit(active, self, pokemon,
                 isFireTypeMaxLevel(pokemon) ? 0 : ExtEvents.currentTurn(battle.getBattleId()) + 2);
         if (pending.triggerTurn == 0) {
@@ -160,6 +174,7 @@ public final class HeldItemBattleEffects {
 
     private static void onBattleEnded(PokemonBattle battle) {
         TURN_WAITING.remove(battle.getBattleId());
+        TRIGGERED.remove(battle.getBattleId()); // 新战斗恢复可发动
         IMMEDIATE.keySet().removeIf(active -> active.getBattle() == battle);
     }
 
@@ -239,9 +254,12 @@ public final class HeldItemBattleEffects {
         }
     }
 
-    /** 帝王火龙果结算：自损 1% 最大生命，敌方按体积比公式扣血（保底留 1 HP），随后消耗果子 */
+    /** 帝王火龙果结算：自损 1% 最大生命，敌方按体积比公式扣血（保底留 1 HP）；发动后本场战斗锁定（道具不消耗） */
     private static void triggerDragonFruit(PokemonBattle battle, BattlePokemon self, Pokemon pokemon) {
         Pokemon holder = self.getEffectedPokemon() != null ? self.getEffectedPokemon() : pokemon;
+        // 发动即锁定：本场战斗内不再登记、不再结算
+        TRIGGERED.computeIfAbsent(battle.getBattleId(), k -> ConcurrentHashMap.newKeySet())
+                .add(holder.getUuid());
         float size = 1.0F;
         float atkVolume = 1.0F;
         if (self.getEntity() != null) {
@@ -278,9 +296,7 @@ public final class HeldItemBattleEffects {
                     holder.getDisplayName(false), selfDamage, target.getName(), enemyDamage));
             dealt++;
         }
-        // 一次性道具：结算后消耗
-        holder.removeHeldItem();
-        LOGGER.info("[Poopy Cobblemon] {} 携带帝王火龙果结算：自损 {} HP，命中 {} 个目标，果子已消耗（体型边长 x{}，等级 {}）",
+        LOGGER.info("[Poopy Cobblemon] {} 携带帝王火龙果结算：自损 {} HP，命中 {} 个目标，道具保留（本场战斗不得再发动；体型边长 x{}，等级 {}）",
                 holder.getDisplayName(false).getString(), selfDamage, dealt, size, holder.getLevel());
     }
 
