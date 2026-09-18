@@ -15,7 +15,7 @@
 | [PoopSky](https://github.com/Altnoir/PoopSkyMod/releases) | 2.2+NeoForge1.21.1-Hotfix2 |
 | [Kotlin for Forge](https://modrinth.com/mod/kotlin-for-forge) | 5.12.0 |
 
-从 [Releases](https://github.com/drunkenQCat/Poopy-Cobblemon/releases) 下载 **poopy-cobblemon-1.2.jar** 和 **cobblemon-ext-1.2.jar**。关闭游戏，替换 `mods` 中的旧版文件，在客户端和服务端安装这两个 JAR。前置模组需另行下载。
+从 [Releases](https://github.com/drunkenQCat/Poopy-Cobblemon/releases) 下载 **poopy-cobblemon-1.2-Fix2.jar** 和 **cobblemon-ext-1.3.jar**。关闭游戏，替换 `mods` 中的旧版文件，在客户端和服务端安装这两个 JAR。前置模组需另行下载。
 
 扩展库负责携带物的战斗效果。其他前置版本可能可以加载，但目前测试的是上表中的组合。
 

@@ -41,8 +41,8 @@ def validate_jar(path: Path, mod_id: str, version: str) -> None:
             dependency = next(d for d in metadata['dependencies'][mod_id] if d['modId'] == 'cobblemon_ext')
             if dependency['type'] != 'required':
                 raise ValueError('Poopy Cobblemon must require cobblemon-ext when installed')
-            if dependency['versionRange'] != '[1.2,)':
-                raise ValueError('Poopy Cobblemon must require cobblemon-ext API 1.2 or later when installed')
+            if dependency['versionRange'] != '[1.3,)':
+                raise ValueError('Poopy Cobblemon must require cobblemon-ext API 1.3 or later when installed')
         names = set(archive.namelist())
         # Follow local model references so namespace/path refactors cannot ship missing textures.
         for model_path in sorted(n for n in names if n.startswith(f'assets/{mod_id}/models/') and n.endswith('.json')):

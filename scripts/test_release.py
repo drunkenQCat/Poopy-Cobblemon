@@ -11,7 +11,7 @@ import release
 
 
 def make_jar(path, mod_id, version='1.2', missing_mixin=False):
-    dependency = '\n[[dependencies.poopy_cobblemon]]\nmodId="cobblemon_ext"\ntype="required"\nversionRange="[1.2,)"\n' if mod_id == 'poopy_cobblemon' else ''
+    dependency = '\n[[dependencies.poopy_cobblemon]]\nmodId="cobblemon_ext"\ntype="required"\nversionRange="[1.3,)"\n' if mod_id == 'poopy_cobblemon' else ''
     with zipfile.ZipFile(path, 'w') as jar:
         jar.writestr('META-INF/MANIFEST.MF', f'Manifest-Version: 1.0\r\nImplementation-Version: {version}\r\n')
         jar.writestr('META-INF/neoforge.mods.toml', f'[[mods]]\nmodId="{mod_id}"\nversion="${{file.jarVersion}}"\n[[mixins]]\nconfig="test.json"\n{dependency}')

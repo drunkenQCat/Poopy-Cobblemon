@@ -15,7 +15,7 @@ For **Minecraft 1.21.1 / NeoForge / Java 21**. Install these dependencies on bot
 | [PoopSky](https://github.com/Altnoir/PoopSkyMod/releases) | 2.2+NeoForge1.21.1-Hotfix2 |
 | [Kotlin for Forge](https://modrinth.com/mod/kotlin-for-forge) | 5.12.0 |
 
-Download **poopy-cobblemon-1.2.jar** and **cobblemon-ext-1.2.jar** from [Releases](https://github.com/drunkenQCat/Poopy-Cobblemon/releases). Close the game, replace older copies in `mods`, and install both JARs on client and server. Dependencies are downloaded separately.
+Download **poopy-cobblemon-1.2-Fix2.jar** and **cobblemon-ext-1.3.jar** from [Releases](https://github.com/drunkenQCat/Poopy-Cobblemon/releases). Close the game, replace older copies in `mods`, and install both JARs on client and server. Dependencies are downloaded separately.
 
 The extension provides the held-item battle effects. Other dependency versions may load, but the versions above are the tested combination.
 
