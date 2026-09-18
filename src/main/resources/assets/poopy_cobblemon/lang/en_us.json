@@ -18,7 +18,7 @@
   "message.poopy_cobblemon.verge_flush": "%s couldn't hold it — the flush toilet blew!",
   "tooltip.poopy_cobblemon.folium_sennae": "Held: After each move this Pokemon uses, the opponent's Speed falls by one stage (stacks to -6)",
   "tooltip.poopy_cobblemon.folium_sennae.2": "A surge of urgency, ready to burst",
-  "tooltip.poopy_cobblemon.king_of_dragon_fruit": "Held: Max-level Fire types activate on entry; others after a full turn on the field. Lose 1% max HP; deal 25% of the target's max HP × (volume factor + level difference/100). Once per battle; the item is not consumed.",
+  "tooltip.poopy_cobblemon.king_of_dragon_fruit": "Held: Max-level Fire types activate on entry; others after a full turn on the field. Lose 1% max HP; deal 25% of the target's max HP × (volume factor + level difference/100). Once per battle.",
   "tooltip.poopy_cobblemon.king_of_dragon_fruit.2": "The royal bowels know no obstruction",
   "message.poopy_cobblemon.equip_success": "%s is now holding it",
   "message.poopy_cobblemon.equip_hint": "Sneak + right-click a Pokemon to equip it as a held item"

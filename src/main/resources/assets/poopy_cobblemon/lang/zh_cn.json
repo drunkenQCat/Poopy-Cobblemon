@@ -7,7 +7,7 @@
   "message.poopy_cobblemon.dragonfruit_trigger": "战斗一触即发，肛气冲压也势不可挡！帝王火龙果，帝王的爆发！对%1$s的肛门造成%2$s点伤害，给%3$s的身心造成%4$s点伤害！",
   "tooltip.poopy_cobblemon.folium_sennae": "携带效果：宝可梦每次使用技能，都会让对手的速度降低（可叠加至 -6）",
   "tooltip.poopy_cobblemon.folium_sennae.2": "便意汹涌，一触即发",
-  "tooltip.poopy_cobblemon.king_of_dragon_fruit": "携带效果：满级火系入场后发动，其他宝可梦完整在场一回合后发动；自损 1% 最大生命，对手受到其最大体力 25% ×（体积系数 + 等级差/100）的伤害（每场战斗限发动一次，道具不消耗）",
+  "tooltip.poopy_cobblemon.king_of_dragon_fruit": "携带效果：满级火系入场后发动，其他宝可梦完整在场一回合后发动；自损 1% 最大生命，对手受到其最大体力 25% ×（体积系数 + 等级差/100）的伤害（每场战斗限发动一次）",
   "tooltip.poopy_cobblemon.king_of_dragon_fruit.2": "帝王的便意，凡人不可阻挡",
   "message.poopy_cobblemon.sit_pokemon_toilet": "%s 蹲上了厕所，开始用力……",
   "message.poopy_cobblemon.sit_pokemon_flush": "%s 跳上了马桶，开始用力……",
