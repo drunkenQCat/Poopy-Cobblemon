@@ -2,6 +2,10 @@
 # Default: build and verify only. -Install: copy into the original Prism layout.
 param([switch]$Install)
 $ErrorActionPreference = 'Stop'
+# Gradle and Node write UTF-8 unconditionally; a CP936 console decodes those bytes as GBK.
+$prevOutputEncoding = [Console]::OutputEncoding
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$env:PYTHONUTF8 = '1'
 Push-Location $PSScriptRoot
 try {
     & python scripts/build.py
@@ -15,4 +19,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Addon installation failed' }
     }
     Write-Host 'Verified artifacts are in dist/.' -ForegroundColor Green
-} finally { Pop-Location }
+} finally {
+    [Console]::OutputEncoding = $prevOutputEncoding
+    Pop-Location
+}
